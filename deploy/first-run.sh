@@ -3,7 +3,7 @@
 #   deploy/first-run.sh               host-Tailscale variant (default, compose.host-tailscale.yaml)
 #   deploy/first-run.sh --sidecar     Tailscale sidecar variant (compose.yaml; also needs secrets/ts_key)
 #   deploy/first-run.sh --make-key    also create secrets/master_key if it does not exist (never replaces one)
-# Walkthrough: docs/first-run.md
+# Walkthrough: docs/ops/first-run.md
 set -u
 
 VARIANT=host
@@ -45,7 +45,7 @@ TS=""
 if command -v tailscale >/dev/null 2>&1; then TS=tailscale
 elif [ -x /Applications/Tailscale.app/Contents/MacOS/Tailscale ]; then TS=/Applications/Tailscale.app/Contents/MacOS/Tailscale; fi
 if [ -n "$TS" ]; then ok "tailscale CLI ($TS)"; else
-	if [ "$VARIANT" = host ]; then bad "tailscale CLI not found (see docs/first-run.md, step 4)"; else warn "tailscale CLI not found on the host (only needed to read your tailnet name)"; fi
+	if [ "$VARIANT" = host ]; then bad "tailscale CLI not found (see docs/ops/first-run.md, step 4)"; else warn "tailscale CLI not found on the host (only needed to read your tailnet name)"; fi
 fi
 
 DNSNAME=""
@@ -85,7 +85,7 @@ else
 fi
 GC="$SEC/google_client.json"
 if [ ! -f "$GC" ]; then
-	bad "$GC missing. Format: {\"client_id\": \"...apps.googleusercontent.com\", \"client_secret\": \"...\"} (docs/first-run.md, step 1)"
+	bad "$GC missing. Format: {\"client_id\": \"...apps.googleusercontent.com\", \"client_secret\": \"...\"} (docs/ops/first-run.md, step 1)"
 elif command -v jq >/dev/null 2>&1; then
 	if jq -e '(.client_id|type=="string" and length>0) and (.client_secret|type=="string" and length>0)' "$GC" >/dev/null 2>&1; then
 		ok "$GC is valid JSON with client_id and client_secret"
@@ -122,7 +122,7 @@ PUB=$(sed -n 's/^CALENDAR_PUBLIC_URL=//p' "$ENVF" 2>/dev/null | tail -n 1)
 m=$(mode_of "$ENVF"); [ "$m" = 600 ] || warn "$ENVF mode is $m (chmod 600 $ENVF is tidy; it holds no secrets by default)"
 
 if command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:8787 -sTCP:LISTEN >/dev/null 2>&1 && [ "$VARIANT" = host ]; then
-	warn "something already listens on port 8787 (the hub itself if it is already running; otherwise see docs/first-run.md, common failures)"
+	warn "something already listens on port 8787 (the hub itself if it is already running; otherwise see docs/ops/first-run.md, common failures)"
 fi
 
 echo

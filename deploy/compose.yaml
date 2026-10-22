@@ -1,12 +1,12 @@
 # Calendar hub: a Tailscale node (HTTPS via `tailscale serve`) and calendard sharing its network.
-# Nothing is published on the host. See deploy/README.md and deploy/RUNBOOK.md.
+# Nothing is published on the host. See docs/ops/deploy.md and docs/ops/RUNBOOK.md.
 #
 #   cp deploy/calendard.env.example deploy/calendard.env      # then edit it
-#   (create the secrets listed in deploy/README.md under deploy/secrets/)
+#   (create the secrets listed in docs/ops/deploy.md under deploy/secrets/)
 #   docker compose -f deploy/compose.yaml up -d --build      (builds server/Dockerfile locally; native arm64 on Apple Silicon)
 #
 # This is the ALTERNATIVE variant (Tailscale in a sidecar). On a Mac mini that already runs Tailscale, prefer
-# deploy/compose.host-tailscale.yaml (see docs/first-run.md). Do not run both at once: they share the project name.
+# deploy/compose.host-tailscale.yaml (see docs/ops/first-run.md). Do not run both at once: they share the project name.
 
 name: calendar
 
@@ -50,7 +50,7 @@ services:
 
   calendard:
     # Built locally from server/Dockerfile (default). To use a published image instead, replace this block with
-    #   image: ${CALENDAR_IMAGE:-ghcr.io/sunday-studio/calendar-hub:edge}   (see docs/ci.md)
+    #   image: ${CALENDAR_IMAGE:-ghcr.io/sunday-studio/calendar-hub:edge}   (see docs/ops/ci.md)
     build:
       context: ${CALENDAR_SERVER_CONTEXT:-../server}
       args:

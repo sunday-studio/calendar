@@ -11,49 +11,27 @@ Apps and scripts reach the same hub through a token API and an MCP server.
 |---|---|
 | `server/` | Go hub `calendard`: sync, API, push, backups. Module `calendar/server` |
 | `api/openapi.yaml` | The wire contract between hub and app |
-| `ios/` | Xcode project (generated from `ios/project.yml`), app, widgets, notification extension |
-| `ios/Packages/` | `CalendarCore` (models, sync, DB), `CalendarUI` (design system), `Feature*`, `Surfaces` |
-| `design/` | Design canvas sources and exports |
-| `deploy/` | Compose file, env example, runbook, smoke checklist |
-| `docs/` | Specs, design audits, screenshots, CI, scripting, alfather |
+| `ios/` | Xcode project (generated from `ios/project.yml`), app, widgets, notification extension, Swift packages |
+| `deploy/` | Compose files, env example, first-run and verify scripts |
+| `scripts/` | End-to-end, release and iOS archive scripts |
+| `docs/` | All documentation, indexed in [docs/README.md](docs/README.md) |
+| `VERSION`, `Makefile` | Product version (read by the release flow), common tasks |
 
-## Run the hub
+## Quickstart
 
-Fixture mode: no accounts, no secrets; the iOS app can pair with it and show sample data.
+Hub in fixture mode (no accounts, no secrets; the iOS app can pair with it):
 
     cd server && go run ./cmd/calendard serve --fixtures
-    # other states: --fixtures-state=normal|loading|empty|noaccounts|banner|offline|down|syncing
 
-Real mode: needs a master key and Google OAuth client; see `deploy/README.md` (env vars `CALENDAR_*`).
+Real mode: [docs/ops/first-run.md](docs/ops/first-run.md), then `make smoke`.
 
-    make build          # server binary
-    docker compose -f deploy/compose.yaml up -d --build
-    make smoke          # checklist in deploy/SMOKE.md (needs a real Google account)
+iOS app (Xcode 26.6, XcodeGen, an iPhone 17 Pro simulator):
 
-## Build and test the iOS app
+    make ios-gen && make ios-build && make ios-test
 
-Needs Xcode 26.6, XcodeGen (`brew install xcodegen`) and an iPhone 17 Pro simulator.
-
-    make ios-gen        # regenerate Calendar.xcodeproj from project.yml
-    make ios-build
-    make ios-test       # package tests, unit tests, UI tests incl. accessibility audits
-    make ios-e2e        # CalendarCore sync against the fixture hub
-
-Pair the app with the hub from the first screen (hub address and a `cal_...` token). Install on a
-device and ship through TestFlight: see `docs/testflight.md`.
+Pair the app with the hub from the first screen (hub address and a `cal_...` token). Shipping through
+TestFlight: [docs/ops/testflight.md](docs/ops/testflight.md). Cutting a release: [docs/ops/RELEASING.md](docs/ops/RELEASING.md).
 
 ## Docs
 
-| Doc | Read it for |
-|---|---|
-| `PLAN.md`, `RESEARCH.md`, `MILESTONES.md` | What and why, milestones M0 to M9 |
-| `ENGINEERING.md` | Conventions for server and iOS |
-| `STATUS.md` | Task board per lane |
-| `DECISIONS.md` | Decisions made, things only you can do (section B), open questions (C), log (D) |
-| `docs/specs/` | Screen specs (day, detail, settings, create/edit, drag, widgets, quick add, search) |
-| `docs/design-audit-*.md` | Design conformance audits |
-| `docs/accessibility.md` | VoiceOver, Dynamic Type, Reduce Motion, audit results and known gaps |
-| `docs/testflight.md` | Signing, archive and upload steps |
-| `docs/ci.md` | GitHub Actions |
-| `docs/scripts.md`, `docs/alfather.md` | Tokens, automations, MCP, the alfather adapter |
-| `deploy/RUNBOOK.md`, `deploy/SMOKE.md` | Operating the hub |
+Start at [docs/README.md](docs/README.md).

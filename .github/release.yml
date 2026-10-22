@@ -1,4 +1,4 @@
-# Categories for GitHub's generated release notes (used when CHANGELOG.md has no section for the tag).
+# Categories for GitHub's generated release notes (used when docs/process/CHANGELOG.md has no section for the tag).
 changelog:
   exclude:
     labels: [skip-changelog]

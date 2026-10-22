@@ -2,7 +2,7 @@ name: release
 
 # main -> image tagged `edge` (+ sha-<short>), no GitHub Release.
 # tag vX.Y.Z[-pre] -> image X.Y.Z and X.Y (+ latest for stable), GitHub Release with deploy bundle, openapi.yaml, SHA256SUMS.
-# How to cut one: RELEASING.md.
+# How to cut one: docs/ops/RELEASING.md.
 
 on:
   push:
@@ -177,9 +177,14 @@ jobs:
           mkdir -p "$out" "$stage/deploy/secrets"
 
           # explicit allow-list: never copy deploy/secrets/* or deploy/calendard.env
-          for f in README.md RUNBOOK.md SMOKE.md calendard.env.example compose.yaml compose.host-tailscale.yaml \
+          for f in calendard.env.example compose.yaml compose.host-tailscale.yaml \
                    first-run.sh backup-offsite.sh drill.sh serve.json; do
             [ -f "deploy/$f" ] && cp "deploy/$f" "$stage/deploy/$f"
+          done
+          # operator docs travel with the bundle at the same relative paths (docs/ops/*)
+          mkdir -p "$stage/docs/ops"
+          for f in deploy.md RUNBOOK.md SMOKE.md first-run.md; do
+            cp "docs/ops/$f" "$stage/docs/ops/$f"
           done
           touch "$stage/deploy/secrets/.gitkeep"
           cp VERSION "$stage/VERSION"
@@ -210,7 +215,7 @@ jobs:
             $0 ~ "^## \\[" v "\\]" {f=1; next}
             f && /^## \[/ {f=0}
             f && /^\[[^]]+\]: / {f=0}
-            f' CHANGELOG.md | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > "$RUNNER_TEMP/notes.md"
+            f' docs/process/CHANGELOG.md | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > "$RUNNER_TEMP/notes.md"
           if grep -q '[^[:space:]]' "$RUNNER_TEMP/notes.md"; then
             echo "source=changelog" >> "$GITHUB_OUTPUT"
           else
@@ -224,7 +229,7 @@ jobs:
             echo "Hub image (linux/amd64, linux/arm64): \`${IMAGE}:${ver}\` (digest \`${DIGEST}\`)."
             echo "Verify: \`gh attestation verify oci://${IMAGE}:${ver} --owner ${GITHUB_REPOSITORY_OWNER}\`."
             echo "The deploy bundle and \`openapi.yaml\` are attached; check them against \`SHA256SUMS\`."
-            echo "The iOS app for this version is distributed through TestFlight (RELEASING.md)."
+            echo "The iOS app for this version is distributed through TestFlight (docs/ops/RELEASING.md)."
           } >> "$RUNNER_TEMP/notes.md"
 
       - name: Create or update the release

@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// Design tokens, hand-written from `design/src/lib.mjs` (LIGHT / DARK blocks).
+/// Design tokens, hand-written from the Gnomon canvas colour system (LIGHT / DARK blocks).
 /// Keep values in sync with that file; DECISIONS D (T03).
 
 /// A colour with a light and a dark value, resolved dynamically.

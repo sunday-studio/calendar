@@ -3,7 +3,7 @@ info:
   title: Calendar hub API
   version: "1.0.0"
   description: |
-    v1 contract through milestone M4 (ENGINEERING.md section 7). Hand-written DTOs in Go
+    v1 contract through milestone M4 (docs/engineering/ENGINEERING.md section 7). Hand-written DTOs in Go
     (server/internal/api/dto.go) and Swift mirror this file; a contract test validates fixtures.
     JSON is camelCase. Instants are RFC 3339 UTC plus `tzid`; all-day events use `date` and `endDate`
     (exclusive end). Additive changes only within v1.

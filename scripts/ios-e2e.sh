@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# iOS end-to-end UI test against the REAL hub + fake Google (docs/e2e.md, "iOS end-to-end").
+# iOS end-to-end UI test against the REAL hub + fake Google (docs/engineering/e2e.md, "iOS end-to-end").
 #   scripts/ios-e2e.sh        stack up (free ports), build, boot "Calendar E2E", run CalendarUITests/E2ETests, tear down
 # Env: IOS_E2E_SIM (simulator name, default "Calendar E2E"), IOS_E2E_ONLY (xctest filter, default E2ETests),
 #      IOS_E2E_STEPS="offline,search" (run only steps whose name contains a word; pairing always runs), KEEP=1 keeps logs and the state dir. Only processes/simulators this script started are stopped.

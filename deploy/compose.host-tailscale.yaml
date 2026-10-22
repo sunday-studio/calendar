@@ -4,7 +4,7 @@
 #   docker compose -f deploy/compose.host-tailscale.yaml up -d --build
 #   tailscale serve --bg --https=443 http://127.0.0.1:8787
 #
-# Full walkthrough: docs/first-run.md. Do not run this together with deploy/compose.yaml (same project name).
+# Full walkthrough: docs/ops/first-run.md. Do not run this together with deploy/compose.yaml (same project name).
 
 name: calendar
 

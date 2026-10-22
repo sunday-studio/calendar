@@ -1,9 +1,9 @@
 # Implementation specs (design lane)
 
 Source of truth: the **Gnomon canvas** (artifact `9NRPFcFQbsNXewTJMLRkfZ`; board ids below are its file names, e.g. `v-day` = `project/v-day.dc.html`). Style sheet = `project/gnomon.css`. Numbers are pt on a 390×844 frame. Dark is the default theme; every board also has a light twin (`-l`).
-`design/src` is the superseded earlier iteration: do not use it.
+The earlier `design/src` iteration was removed (recoverable from commit 9c13ffa).
 
-Components referenced here live in `ios/Packages/CalendarUI` (see `docs/design-audit-1.md` §4 for the D2 list). **New components added for these specs** are marked ★ and listed in each file's "Components" section.
+Components referenced here live in `ios/Packages/CalendarUI` (see design-audit-1 (removed, recoverable from commit 9c13ffa) §4 for the D2 list). **New components added for these specs** are marked ★ and listed in each file's "Components" section.
 
 | Spec | Boards | Milestone |
 |---|---|---|

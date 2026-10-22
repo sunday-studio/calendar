@@ -1,6 +1,6 @@
 // Command fakegoogle is a stand-alone fake Google (OAuth + Calendar v3) for end-to-end runs of the
 // real hub with no credentials. Admin controls: POST /_admin/{fail,reset,seed,etag-bump,revoke,
-// unrevoke,expire-sync-tokens}, GET /_admin/state. See docs/e2e.md.
+// unrevoke,expire-sync-tokens}, GET /_admin/state. See docs/engineering/e2e.md.
 package main
 
 import (

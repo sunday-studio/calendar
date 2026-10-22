@@ -1,6 +1,6 @@
 // Package alfather is the optional natural-language parser behind POST /v1/quick-add. alfather
 // is reached as an MCP server over streamable HTTP; the tool name and the payload shapes are a
-// configurable contract (see docs/alfather.md) because alfather's real tool names are not known
+// configurable contract (see docs/engineering/alfather.md) because alfather's real tool names are not known
 // yet. Any failure (unreachable, timeout, tool error, output that is not a valid Draft) falls
 // back to the rule parser and marks the Draft degraded so the app can show "alfather isn't
 // answering" while still offering the rule-based guess.

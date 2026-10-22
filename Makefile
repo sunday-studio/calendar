@@ -28,7 +28,7 @@ backup-drill:
 
 # the manual live checklist for a release
 smoke:
-	@cat deploy/SMOKE.md
+	@cat docs/ops/SMOKE.md
 
 vuln:
 	cd $(SERVER) && (command -v govulncheck >/dev/null && govulncheck ./... || echo "install govulncheck: go install golang.org/x/vuln/cmd/govulncheck@latest")
@@ -53,11 +53,11 @@ ios-test: ios-gen
 ios-e2e:
 	./scripts/e2e-fixtures.sh
 
-# XCUITest against the real hub + fake Google (see docs/e2e.md)
+# XCUITest against the real hub + fake Google (see docs/engineering/e2e.md)
 ios-e2e-real:
 	./scripts/ios-e2e.sh
 
-# ---- end-to-end against a fake Google (see docs/e2e.md) ----
+# ---- end-to-end against a fake Google (see docs/engineering/e2e.md) ----
 e2e-server:
 	./scripts/e2e.sh test
 
@@ -74,7 +74,7 @@ e2e-down:
 ios-gen-personal:
 	cd ios && sed -e '/aps-environment: development/d' -e '/usernotifications.time-sensitive: true/d' project.yml > project.personal.yml && xcodegen generate --spec project.personal.yml && rm -f project.personal.yml
 
-# ---- release builds with the paid team (docs/testflight.md) ----
+# ---- release builds with the paid team (docs/ops/testflight.md) ----
 # CALENDAR_TEAM_ID feeds DEVELOPMENT_TEAM in ios/project.yml; default is the free Personal Team.
 # Release: CALENDAR_TEAM_ID=<paid id> make ios-gen
 export CALENDAR_TEAM_ID ?= 2QG5WSN24S
@@ -88,7 +88,7 @@ ios-archive:
 ios-archive-adhoc:
 	./scripts/ios-archive.sh --adhoc
 
-# ---- releases (RELEASING.md) ----
+# ---- releases (docs/ops/RELEASING.md) ----
 # make release-dry VERSION=patch|minor|major|X.Y.Z     checks + plan, writes nothing
 # make release     VERSION=...                         bumps VERSION/CHANGELOG/ios MARKETING_VERSION, commits, tags (never pushes)
 .PHONY: release-dry release

@@ -4,9 +4,9 @@
 #   scripts/release.sh [--dry-run|--execute] <X.Y.Z[-pre.N] | patch | minor | major>
 #
 # Default is --dry-run: every check runs and the plan is printed, nothing is written. Use --execute
-# (or `make release VERSION=...`) to apply it. See RELEASING.md.
+# (or `make release VERSION=...`) to apply it. See docs/ops/RELEASING.md.
 #
-# Special case (first release): if the target equals VERSION and CHANGELOG.md already has a dated
+# Special case (first release): if the target equals VERSION and docs/process/CHANGELOG.md already has a dated
 # "## [X.Y.Z] - date" section, no files are edited; the script only checks and tags the current HEAD.
 set -euo pipefail
 
@@ -27,10 +27,11 @@ fail() { echo "release: $*" >&2; exit 1; }
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+CL=docs/process/CHANGELOG.md   # the changelog lives with the process docs
 
 # --- git checks ---------------------------------------------------------------------------------------
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1 || [ "$(git rev-parse --show-toplevel 2>/dev/null)" != "$ROOT" ]; then
-  fail "$ROOT is not a git repository. Run 'git init -b main', commit, and push first (RELEASING.md, 'Cutting v0.1.0')."
+  fail "$ROOT is not a git repository. Run 'git init -b main', commit, and push first (docs/ops/RELEASING.md, 'Cutting v0.1.0')."
 fi
 git rev-parse --verify HEAD >/dev/null 2>&1 || fail "no commits yet. Make the initial commit first."
 branch="$(git symbolic-ref --short HEAD 2>/dev/null || echo detached)"
@@ -62,11 +63,11 @@ if git remote get-url origin >/dev/null 2>&1 && git ls-remote --exit-code --tags
 fi
 
 # --- CHANGELOG ----------------------------------------------------------------------------------------
-[ -f CHANGELOG.md ] || fail "CHANGELOG.md missing."
-grep -q '^## \[Unreleased\]' CHANGELOG.md || fail "CHANGELOG.md has no '## [Unreleased]' section."
-unreleased_body="$(awk '/^## \[Unreleased\]/{f=1;next} /^## \[/{f=0} /^\[[^]]+\]: /{f=0} f' CHANGELOG.md | grep -v '^[[:space:]]*$' || true)"
+[ -f $CL ] || fail "$CL missing."
+grep -q '^## \[Unreleased\]' $CL || fail "$CL has no '## [Unreleased]' section."
+unreleased_body="$(awk '/^## \[Unreleased\]/{f=1;next} /^## \[/{f=0} /^\[[^]]+\]: /{f=0} f' $CL | grep -v '^[[:space:]]*$' || true)"
 has_section=0
-grep -q "^## \[$NEW\] - " CHANGELOG.md && has_section=1
+grep -q "^## \[$NEW\] - " $CL && has_section=1
 
 # --- iOS marketing version ----------------------------------------------------------------------------
 PROJ=ios/project.yml
@@ -75,7 +76,7 @@ pat='^    MARKETING_VERSION: "[0-9][0-9.]*"'
 
 TAG_ONLY=0
 if [ "$NEW" = "$CUR" ]; then
-  [ "$has_section" = 1 ] || fail "$NEW is already the current VERSION and CHANGELOG.md has no '## [$NEW] - date' section."
+  [ "$has_section" = 1 ] || fail "$NEW is already the current VERSION and $CL has no '## [$NEW] - date' section."
   [ -z "$unreleased_body" ] || fail "VERSION is already $NEW but [Unreleased] still has entries. Pick a new version."
   grep -q "^    MARKETING_VERSION: \"$IOSV\"" "$PROJ" || fail "VERSION is $NEW but $PROJ has a different MARKETING_VERSION."
   TAG_ONLY=1
@@ -86,8 +87,8 @@ else
   if [ "$newkey" \< "$curkey" ] || { [ "$newkey" = "$curkey" ] && [ "$CUR" = "$core" ]; }; then
     fail "$NEW is not greater than the current version $CUR."
   fi
-  [ "$has_section" = 0 ] || fail "CHANGELOG.md already has a section for $NEW."
-  [ -n "$unreleased_body" ] || fail "[Unreleased] in CHANGELOG.md is empty. Describe the changes first."
+  [ "$has_section" = 0 ] || fail "$CL already has a section for $NEW."
+  [ -n "$unreleased_body" ] || fail "[Unreleased] in $CL is empty. Describe the changes first."
 fi
 
 # --- plan ---------------------------------------------------------------------------------------------
@@ -123,14 +124,14 @@ if [ "$TAG_ONLY" = 0 ]; then
       print "[Unreleased]: " base "/compare/v" new "...HEAD"
       print "[" new "]: " base "/compare/v" cur "...v" new
       next }
-    { print }' CHANGELOG.md > "$tmp"
-  cat "$tmp" > CHANGELOG.md
+    { print }' $CL > "$tmp"
+  cat "$tmp" > $CL
 
   sed "s/^    MARKETING_VERSION: \"[0-9][0-9.]*\"/    MARKETING_VERSION: \"$IOSV\"/" "$PROJ" > "$tmp"
   cat "$tmp" > "$PROJ"
   grep -q "^    MARKETING_VERSION: \"$IOSV\"" "$PROJ" || fail "failed to update MARKETING_VERSION"
 
-  git add VERSION CHANGELOG.md "$PROJ"
+  git add VERSION $CL "$PROJ"
   git commit -q -m "Release $TAG"
 fi
 git tag -a "$TAG" -m "Calendar $NEW"

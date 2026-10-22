@@ -3,7 +3,7 @@
 #   scripts/e2e.sh test   build, start on free ports with temp state, assert, tear down (default)
 #   scripts/e2e.sh up     leave the stack running on 8787 (hub) / 8788 (fake Google); prints a dev token
 #   scripts/e2e.sh down   stop what `up` started
-# See docs/e2e.md. Needs go, curl, jq, python3.
+# See docs/engineering/e2e.md. Needs go, curl, jq, python3.
 set -uo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cmd="${1:-test}"
