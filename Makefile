@@ -99,3 +99,16 @@ release-dry:
 release:
 	@test -n "$(VERSION)" -a "$(VERSION)" != "dev" || { echo "usage: make release VERSION=patch|minor|major|X.Y.Z"; exit 2; }
 	./scripts/release.sh --execute $(VERSION)
+
+# Static Linux binaries for the Docker image's platforms, built without cgo exactly as the Dockerfile does.
+# Offline part of "does the image build": needs no Docker daemon and no network. make build-linux [VERSION=x]
+.PHONY: build-linux
+build-linux:
+	@set -e; cd $(SERVER); mkdir -p bin; \
+	for arch in amd64 arm64; do \
+		out=bin/calendard-linux-$$arch; \
+		CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build -trimpath -ldflags "-s -w -X main.version=$(or $(VERSION),dev)" -o $$out ./cmd/calendard; \
+		go version -m $$out | grep -q 'CGO_ENABLED=0' || { echo "$$out was built with cgo"; exit 1; }; \
+		head -c4 $$out | od -An -c | grep -q 'E *L *F' || { echo "$$out is not an ELF binary"; exit 1; }; \
+		printf '%s  %s bytes\n' $$out $$(wc -c < $$out | tr -d ' '); \
+	done
