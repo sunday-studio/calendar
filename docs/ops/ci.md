@@ -1,5 +1,9 @@
 # CI and image publishing
 
+> **CI is switched off for now** (2026-10-23, on purpose, until the app and hub are in a state we are happy with). Both workflows are disabled on GitHub (`ci`, `release`). Turn them back on with:
+> `gh workflow enable ci.yml --repo sunday-studio/calendar && gh workflow enable release.yml --repo sunday-studio/calendar`
+> Dependabot version updates are a separate setting (`.github/dependabot.yml`) and are still active.
+
 Workflows live in `.github/`. Nothing here has been run on GitHub yet (this folder is not a git repo); the server job's commands (`go vet`, `go test -race -count=1`) pass locally. The Docker image has **not** been built, because no Docker daemon was available when this was written.
 
 ## What runs
