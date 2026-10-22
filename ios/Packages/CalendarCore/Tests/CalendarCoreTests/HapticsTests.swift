@@ -7,7 +7,7 @@ import Testing
     }
 
     @Test func tableMatchesTheBrief() {
-        for t in [HapticTrigger.snap, .viewSwitch, .dayPage, .monthPick, .rowTap, .today, .menuPick] { #expect(HapticMap.feedback(for: t) == .selection) }
+        for t in [HapticTrigger.snap, .viewSwitch, .dayPage, .monthPick, .rowTap, .today] { #expect(HapticMap.feedback(for: t) == .selection) }
         #expect(HapticMap.feedback(for: .primaryButton) == .impact(.light))
         #expect(HapticMap.feedback(for: .fab) == .impact(.light))
         #expect(HapticMap.feedback(for: .sheetOpen) == .impact(.soft))

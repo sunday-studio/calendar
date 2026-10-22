@@ -14,24 +14,12 @@ enum StatusWords {
         }
     }
 
-    static func color(_ a: Account) -> Color {
-        switch a.statusKind {
-        case .needsReauth: .calAmber
-        case .error: .calRed
-        default: .calInk2
-        }
-    }
-
     static func lastSync(_ a: Account, now: Date = Date()) -> String {
         guard let d = a.lastOkAt ?? a.lastSyncAt else { return "Not synced yet" }
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .full
         return "Synced " + f.localizedString(for: d, relativeTo: now)
     }
-}
-
-struct Hairline: View {
-    var body: some View { Rectangle().fill(Color.calLine).frame(height: 1) }
 }
 
 extension StatusWords {

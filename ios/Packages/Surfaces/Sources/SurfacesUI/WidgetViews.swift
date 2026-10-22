@@ -1,4 +1,3 @@
-import CalendarCore
 import CalendarUI
 import SurfacesCore
 import SwiftUI

@@ -7,7 +7,7 @@ public enum HapticTrigger: Sendable, CaseIterable {
     case snap
     case viewSwitch, dayPage, monthPick
     /// Opening an event or invitation, picking a row in a sheet, tapping Today.
-    case rowTap, today, menuPick
+    case rowTap, today
     /// Month grid opens or closes.
     case monthToggle
     /// A dragged block was dropped and the write started.
@@ -34,7 +34,7 @@ public enum HapticFeedback: Equatable, Sendable {
 public enum HapticMap {
     public static func feedback(for t: HapticTrigger) -> HapticFeedback {
         switch t {
-        case .snap, .viewSwitch, .dayPage, .monthPick, .rowTap, .today, .menuPick: .selection
+        case .snap, .viewSwitch, .dayPage, .monthPick, .rowTap, .today: .selection
         case .monthToggle: .impact(.soft)
         case .drop: .impact(.light)
         case .primaryButton, .fab: .impact(.light)

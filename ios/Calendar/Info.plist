@@ -52,8 +52,6 @@
 	<true/>
 	<key>UIAppFonts</key>
 	<array>
-		<string>Newsreader.ttf</string>
-		<string>Newsreader-Italic.ttf</string>
 		<string>SchibstedGrotesk.ttf</string>
 		<string>DMMono-Regular.ttf</string>
 		<string>DMMono-Medium.ttf</string>

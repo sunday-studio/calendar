@@ -2,13 +2,6 @@ import CalendarCore
 import Foundation
 import Observation
 
-/// Actions that need the write service (T14/T15); the detail screen only reports the intent.
-public enum EventAction: Equatable, Sendable {
-    case edit, duplicate, move
-    case delete(EventScope)
-    case rsvp(String) // accepted | tentative | declined
-}
-
 @MainActor @Observable
 public final class EventDetailViewModel {
     public enum Phase: Equatable, Sendable {
@@ -16,8 +9,6 @@ public final class EventDetailViewModel {
         case loaded
         case failed(String)
     }
-
-    public static let readOnlyCopy = "This event can\u{2019}t be edited here"
 
     public let id: String
     public private(set) var phase: Phase = .loading
@@ -50,19 +41,12 @@ public final class EventDetailViewModel {
     // MARK: Derived
 
     public var item: AgendaItem? { detail?.item ?? preview }
-    public var timeText: EventTimeText? { item.map { format.text(for: $0) } }
     public var relative: String? { item.flatMap { EventTimeFormat.relative($0, now: now) } }
     public var readOnly: Bool { item.map { !$0.canEdit } ?? false }
-    public var readOnlyBanner: String? { readOnly ? Self.readOnlyCopy : nil }
     public var people: [GuestRow] { detail.map(PeopleLogic.rows) ?? [] }
-    public var peopleSummary: String { PeopleLogic.summary(people) }
     public var recurrenceText: String? {
         if let r = RecurrenceText.summary(detail?.recurrence) { return r }
         return item?.recurring == true ? "Repeats" : nil
-    }
-    public var descriptionText: AttributedString? {
-        guard let d = detail?.description, !DescriptionText.plain(d).isEmpty else { return nil }
-        return DescriptionText.linkified(d)
     }
 
     /// Structured join link, else a recognised meeting link inside the notes.
@@ -130,12 +114,6 @@ public final class EventDetailViewModel {
     }
 
     public var isRecurring: Bool { item?.recurring == true }
-
-    public var calendarLine: String? {
-        guard let d = detail else { return nil }
-        let parts = [d.calendarName, d.accountName].compactMap { $0 }.filter { !$0.isEmpty }
-        return parts.isEmpty ? nil : parts.joined(separator: " \u{00B7} ")
-    }
 
     /// Reply bar only while a reply is pending and replying is allowed.
     public var showsReplyBar: Bool {

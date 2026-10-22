@@ -68,27 +68,26 @@ public enum TimelineLayout {
 public struct TimelineEventBlock: View {
     let item: TimelineItem
     let height: CGFloat
-    let compact: Bool
     let singleLine: Bool
 
-    /// `compact`: Week cells (10pt, one line). `singleLine`: 3-day columns: 14pt title on one line with a tail ellipsis,
+    /// `singleLine`: 3-day columns: 14pt title on one line with a tail ellipsis,
     /// no second line (canvas v-three shows "Roadmap review" truncated, never wrapped mid-word).
-    public init(_ item: TimelineItem, height: CGFloat, compact: Bool = false, singleLine: Bool = false) {
-        self.item = item; self.height = height; self.compact = compact; self.singleLine = singleLine
+    public init(_ item: TimelineItem, height: CGFloat, singleLine: Bool = false) {
+        self.item = item; self.height = height; self.singleLine = singleLine
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(item.title).font(compact ? CalFont.font(.sans, size: 10, relativeTo: .caption2) : CalFont.font(.sans, size: 14, relativeTo: .footnote))
+            Text(item.title).font(CalFont.font(.sans, size: 14, relativeTo: .footnote))
                 .foregroundStyle(Color.calInk)
                 .strikethrough(item.state == .declined)
-                .lineLimit(height < 46 || compact || singleLine ? 1 : 2)
+                .lineLimit(height < 46 || singleLine ? 1 : 2)
                 .truncationMode(.tail)
-            if let sub = item.subtitle, !compact, !singleLine, height >= 46 {
+            if let sub = item.subtitle, !singleLine, height >= 46 {
                 Text(sub).font(CalFont.font(.sans, size: 12, relativeTo: .caption)).foregroundStyle(Color.calInk2).lineLimit(1)
             }
         }
-        .padding(.horizontal, compact ? 3 : 10).padding(.vertical, compact ? 2 : 6)
+        .padding(.horizontal, 10).padding(.vertical, 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background {
             switch item.state {
@@ -161,14 +160,13 @@ public struct TimelineColumn: View {
     let now: Int?
     let nowLabel: String?
     let laneGap: CGFloat
-    let compact: Bool
     let singleLine: Bool
 
     public init(_ items: [TimelineItem], firstHour: Int = 9, hours: Int = 11, hourHeight: CGFloat = 64,
-                now: Int? = nil, nowLabel: String? = nil, laneGap: CGFloat = 6, compact: Bool = false,
+                now: Int? = nil, nowLabel: String? = nil, laneGap: CGFloat = 6,
                 singleLine: Bool = false) {
         self.items = items; self.firstHour = firstHour; self.hours = hours; self.hourHeight = hourHeight
-        self.now = now; self.nowLabel = nowLabel; self.laneGap = laneGap; self.compact = compact; self.singleLine = singleLine
+        self.now = now; self.nowLabel = nowLabel; self.laneGap = laneGap; self.singleLine = singleLine
     }
 
     public var body: some View {
@@ -183,7 +181,7 @@ public struct TimelineColumn: View {
                     let f = TimelineLayout.frame(for: item, firstHour: firstHour, hourHeight: hourHeight)
                     let lane = lanes[item.id] ?? .init(index: 0, count: 1)
                     let w = (geo.size.width - laneGap * CGFloat(lane.count - 1)) / CGFloat(lane.count)
-                    TimelineEventBlock(item, height: f.height, compact: compact, singleLine: singleLine)
+                    TimelineEventBlock(item, height: f.height, singleLine: singleLine)
                         .frame(width: w)
                         .offset(x: CGFloat(lane.index) * (w + laneGap), y: f.top)
                 }

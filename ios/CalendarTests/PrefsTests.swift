@@ -63,10 +63,9 @@ import Testing
     }
 
     @Test func hourLabelsFollowTheClock() {
-        #expect(DayLogic.hourLabel(9, compact: false, time24: true) == "09:00")
-        #expect(DayLogic.hourLabel(9, compact: true, time24: true) == "09")
-        #expect(DayLogic.hourLabel(15, compact: false, time24: false).hasPrefix("3"))
-        #expect(DayLogic.hourLabel(15, compact: false, time24: false).uppercased().contains("PM"))
+        #expect(DayLogic.hourLabel(9, time24: true) == "09:00")
+        #expect(DayLogic.hourLabel(15, time24: false).hasPrefix("3"))
+        #expect(DayLogic.hourLabel(15, time24: false).uppercased().contains("PM"))
     }
 }
 

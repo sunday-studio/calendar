@@ -9,9 +9,6 @@ public enum CalFont {
         case sans, sansMedium, mono, monoMedium
 
         /// PostScript name (the variable files expose these named instances).
-        /// Retired serif: callers that still ask for it get the sans (canvas has no serif).
-        public static var serif: Face { .sans }
-
         public var postScriptName: String {
             switch self {
             case .sans: "SchibstedGrotesk-Regular"
@@ -38,7 +35,6 @@ public enum CalFont {
     public static let navTitle = font(.sansMedium, size: 18, relativeTo: .headline)
     /// List title: 19 Regular.
     public static let heading = font(.sans, size: 19, relativeTo: .title3)
-    public static let listTitle = heading
     /// Body: 17 Regular. Buttons: 17 Medium.
     public static let body = font(.sans, size: 17, relativeTo: .body)
     public static let bodyMedium = font(.sansMedium, size: 17, relativeTo: .body)
@@ -46,7 +42,6 @@ public enum CalFont {
     public static let status = font(.sans, size: 15, relativeTo: .subheadline)
     /// Second line of a row and hints: 14 / 13.
     public static let sub = font(.sans, size: 14, relativeTo: .footnote)
-    public static let subMedium = font(.sansMedium, size: 14, relativeTo: .footnote)
     public static let hint = font(.sans, size: 13, relativeTo: .footnote)
     /// Uppercase mono label, 11 (apply `.calLabel()` for tracking + uppercase).
     public static let label = font(.mono, size: 11, relativeTo: .caption2)
@@ -56,7 +51,6 @@ public enum CalFont {
     public static let timeSmall = font(.mono, size: 11, relativeTo: .caption2).monospacedDigit()
     /// Next-block footer ("in 8 min"): 18 Regular.
     public static let footer = font(.sans, size: 18, relativeTo: .body)
-    public static let countdown = nextTitle
     /// Join / Map button inside the Next block: 16 Regular.
     public static let blockButton = font(.sans, size: 16, relativeTo: .body)
     /// Flip-cell glyphs: Mono Medium. Sizes 18 / 26 / 44 (cell heights 30 / 44 / 60).

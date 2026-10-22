@@ -1,4 +1,3 @@
-import CalendarCore
 import SurfacesCore
 import UIKit
 @preconcurrency import UserNotifications

@@ -72,11 +72,10 @@ public struct BrassLine: View {
 }
 
 /// Section label (canvas `.lb`): mono 11, +0.14em, UPPERCASE, dim. "Today", "Tomorrow", "Earlier today", "Tue 13 Oct".
-/// `detail`, `count` and `isToday` are accepted for source compatibility and ignored: the canvas label is the title only.
 public struct DaySectionHeader: View {
     let title: String
 
-    public init(title: String, detail: String? = nil, count: Int? = nil, isToday: Bool = false) {
+    public init(title: String) {
         self.title = title
     }
 
@@ -289,20 +288,6 @@ public struct CalButton: View {
         .frame(minHeight: Spacing.hit)
         .opacity(isEnabled ? 1 : 0.35)
     }
-}
-
-public struct PrimaryButton: View {
-    let title: String
-    let action: () -> Void
-    public init(_ title: String, action: @escaping () -> Void) { self.title = title; self.action = action }
-    public var body: some View { CalButton(title, kind: .primary, action: action) }
-}
-
-public struct SecondaryButton: View {
-    let title: String
-    let action: () -> Void
-    public init(_ title: String, action: @escaping () -> Void) { self.title = title; self.action = action }
-    public var body: some View { CalButton(title, kind: .outline, action: action) }
 }
 
 /// Pinned footer (canvas `.ft2`): bg fill, hairline on top, padding 16/24, buttons stacked with gap 10.

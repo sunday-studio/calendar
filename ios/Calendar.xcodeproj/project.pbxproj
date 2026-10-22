@@ -19,7 +19,6 @@
 		1BF015CCD5145FF3FF252835 /* CalendarWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFAD056C697F947D76F39363 /* CalendarWidgets.swift */; };
 		1E277E4F8CB434EBE834DFCA /* DMMono-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9CE4CACD30373B5042EA48D0 /* DMMono-Medium.ttf */; };
 		2291A293FAFA5BCCCFD419B6 /* AccountsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DFFBC46A0402E6412DAFF0D /* AccountsTests.swift */; };
-		238817E73B9A96131B69C383 /* Newsreader-Italic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 57D836D72CC53D978ED5B9C8 /* Newsreader-Italic.ttf */; };
 		2F5C89A12F6D83EA946B02A3 /* PrefsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A878214B2B95B280FEB06D43 /* PrefsTests.swift */; };
 		384F57F04701E9350500066D /* FeatureAccounts in Frameworks */ = {isa = PBXBuildFile; productRef = 626CB47731316A7156368AE4 /* FeatureAccounts */; };
 		3E69C54A8EA68234E712E758 /* FeatureEvent in Frameworks */ = {isa = PBXBuildFile; productRef = 070910FFC6813276BE67546E /* FeatureEvent */; };
@@ -51,7 +50,6 @@
 		A42008D094834995E8E11F72 /* SurfacesCore in Frameworks */ = {isa = PBXBuildFile; productRef = 95B2E83F322348EF66F8BD1B /* SurfacesCore */; };
 		AA43DAC7A89C928CD167517E /* AppServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = A78B7F77FB564FFE24A7F93A /* AppServices.swift */; };
 		BD4EDE0126D881FE94160107 /* SchibstedGrotesk.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 06028D90D3F1BA372C619951 /* SchibstedGrotesk.ttf */; };
-		BEE9FEAFCE291ABC878B9885 /* Newsreader-Italic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 57D836D72CC53D978ED5B9C8 /* Newsreader-Italic.ttf */; };
 		C078814E860BECC94B49DB32 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A84A1F392A4F43A193362DFC /* PrivacyInfo.xcprivacy */; };
 		C3566EE39CE1754C8C058A7D /* EventEditorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBE6A8AC544EB079B83EED9B /* EventEditorTests.swift */; };
 		C364CE7F0CF37CC15C68035E /* EventDetailTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AE3F0A826BB6CD69DAFB228 /* EventDetailTests.swift */; };
@@ -59,13 +57,11 @@
 		CBE45772068A7FFE4DF79744 /* AssistTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5185AA69DE24137F8E3DF38F /* AssistTests.swift */; };
 		CC41E63FF84F61754FB2B523 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 90CEA65399ADA35066995D25 /* PrivacyInfo.xcprivacy */; };
 		CF7D459BF15A84FA56A992B3 /* CalendarCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8983FF0EBFBC395BD8F5EFBE /* CalendarCore */; };
-		D326C8D8A66C5D7AA90A6374 /* Newsreader.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BBCEEAED738A7B1750DD81D3 /* Newsreader.ttf */; };
 		DC4096C40900F0B2003225FD /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B31ADA2363B55277D2C61182 /* AppDelegate.swift */; };
 		E3A47AD358A4CBF5E454DA77 /* CalendarUI in Frameworks */ = {isa = PBXBuildFile; productRef = B3815AB2E2A6F40D739A9089 /* CalendarUI */; };
 		E9F37027FBFB78808F79324D /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F38A33CA10C25358A23070C /* NotificationService.swift */; };
 		EA90F8BCE49039E024D0831C /* EventEditorUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E915A0C256930BFBEEB5CAA /* EventEditorUITests.swift */; };
 		F6CEACF7D00491F1FF66E90E /* CalendarUI in Frameworks */ = {isa = PBXBuildFile; productRef = A6E3ABABFC2A9814529C08B3 /* CalendarUI */; };
-		FBE3DF922FCD7B0CB30DB8A4 /* Newsreader.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BBCEEAED738A7B1750DD81D3 /* Newsreader.ttf */; };
 		FC3C390A6C853E7711BEDD73 /* HomeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8971838E5765FAFACEAD9E9A /* HomeTests.swift */; };
 		FE50636C544A9F38F248FCD4 /* SurfacesUI in Frameworks */ = {isa = PBXBuildFile; productRef = 479CFCB324C685B142CBED66 /* SurfacesUI */; };
 		FF8991EC643161A9AA20077B /* CalendarNotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6A2236A8C6B666C0E067A41A /* CalendarNotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -134,7 +130,6 @@
 		50438579D900C06986A12BFE /* CalendarWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CalendarWidgets.entitlements; sourceTree = "<group>"; };
 		5116BDCA4A414C21572FD969 /* CalendarIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarIntents.swift; sourceTree = "<group>"; };
 		5185AA69DE24137F8E3DF38F /* AssistTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistTests.swift; sourceTree = "<group>"; };
-		57D836D72CC53D978ED5B9C8 /* Newsreader-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Newsreader-Italic.ttf"; sourceTree = "<group>"; };
 		5AE3F0A826BB6CD69DAFB228 /* EventDetailTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailTests.swift; sourceTree = "<group>"; };
 		5F8EB6EDFAD7BA4D4DCEB46E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		69FACA3B7DF4555935591DC8 /* DMMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "DMMono-Regular.ttf"; sourceTree = "<group>"; };
@@ -154,7 +149,6 @@
 		A878214B2B95B280FEB06D43 /* PrefsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrefsTests.swift; sourceTree = "<group>"; };
 		AE8CBBEFF4A46C900F606A1E /* AccessibilityAuditUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityAuditUITests.swift; sourceTree = "<group>"; };
 		B31ADA2363B55277D2C61182 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		BBCEEAED738A7B1750DD81D3 /* Newsreader.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Newsreader.ttf; sourceTree = "<group>"; };
 		BD8B466EAB84F0F0FE22200D /* CalendarNotificationService.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CalendarNotificationService.entitlements; sourceTree = "<group>"; };
 		C39FF42DC4FF8E9A984F1CBE /* DesignSystemTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystemTests.swift; sourceTree = "<group>"; };
 		CBE6A8AC544EB079B83EED9B /* EventEditorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventEditorTests.swift; sourceTree = "<group>"; };
@@ -289,8 +283,6 @@
 			children = (
 				9CE4CACD30373B5042EA48D0 /* DMMono-Medium.ttf */,
 				69FACA3B7DF4555935591DC8 /* DMMono-Regular.ttf */,
-				57D836D72CC53D978ED5B9C8 /* Newsreader-Italic.ttf */,
-				BBCEEAED738A7B1750DD81D3 /* Newsreader.ttf */,
 				06028D90D3F1BA372C619951 /* SchibstedGrotesk.ttf */,
 			);
 			path = Fonts;
@@ -578,8 +570,6 @@
 			files = (
 				5A2FF57E709E38211688FC45 /* DMMono-Medium.ttf in Resources */,
 				1160F76111EB73B0E8C9BA69 /* DMMono-Regular.ttf in Resources */,
-				BEE9FEAFCE291ABC878B9885 /* Newsreader-Italic.ttf in Resources */,
-				FBE3DF922FCD7B0CB30DB8A4 /* Newsreader.ttf in Resources */,
 				C078814E860BECC94B49DB32 /* PrivacyInfo.xcprivacy in Resources */,
 				6F568EFFA97AB71518698C98 /* SchibstedGrotesk.ttf in Resources */,
 			);
@@ -592,8 +582,6 @@
 				6100E2D8B8E9147255F1707A /* Assets.xcassets in Resources */,
 				1E277E4F8CB434EBE834DFCA /* DMMono-Medium.ttf in Resources */,
 				68A7EAC57FD162F68FCAF4DC /* DMMono-Regular.ttf in Resources */,
-				238817E73B9A96131B69C383 /* Newsreader-Italic.ttf in Resources */,
-				D326C8D8A66C5D7AA90A6374 /* Newsreader.ttf in Resources */,
 				723DFB208F0638BFF83DE461 /* PrivacyInfo.xcprivacy in Resources */,
 				BD4EDE0126D881FE94160107 /* SchibstedGrotesk.ttf in Resources */,
 			);

@@ -6,7 +6,7 @@ import SwiftUI
 import WidgetKit
 
 /// Lock-screen Live Activity (spec w-live): bright account block with flip cells, title, live words, Join, 3pt progress line.
-/// Mirrors CalendarUI's `LiveActivityBlock` but takes live `Text` for the footer (a `String` cannot count down).
+/// Meeting block for the Live Activity; takes live `Text` for the footer (a `String` cannot count down).
 public struct MeetingLockView: View {
     let attributes: MeetingActivityAttributes
     let state: MeetingActivityAttributes.ContentState

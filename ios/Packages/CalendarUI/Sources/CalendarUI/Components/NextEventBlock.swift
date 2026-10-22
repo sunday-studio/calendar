@@ -8,7 +8,6 @@ public struct NextEventBlock: View {
         case join(String)          // filled: "Join"
         case map(String)           // outlined: "Map"
         case details(String)       // outlined: "Details"
-        case inProgress(String)    // legacy: no button, text goes to the footer
         case none
     }
 
@@ -24,15 +23,6 @@ public struct NextEventBlock: View {
                 action: Action = .none, onAction: (() -> Void)? = nil) {
         self.time = time; self.title = title; self.footer = footer
         self.color = color; self.action = action; self.onAction = onAction
-    }
-
-    /// Legacy initialiser (pre-canvas). `kicker` and `meta` are ignored; `countdown` becomes the footer.
-    /// Pass `time:` through the canvas initialiser to get the flip cells.
-    public init(kicker: String = "Up next", title: String, countdown: String, meta: [String] = [],
-                color: AccountColor, action: Action = .none, onAction: (() -> Void)? = nil) {
-        var footer = countdown
-        if case .inProgress(let left) = action { footer = left }
-        self.init(time: nil, title: title, footer: footer, color: color, action: action, onAction: onAction)
     }
 
     private var ink: Color { Theme.onAccountColor.color }
@@ -73,7 +63,7 @@ public struct NextEventBlock: View {
                     .overlay(Rectangle().strokeBorder(ink, lineWidth: 1))
             }
             .buttonStyle(.plain).frame(minHeight: Spacing.hit)
-        case .inProgress, .none:
+        case .none:
             EmptyView()
         }
     }

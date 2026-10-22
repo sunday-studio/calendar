@@ -156,7 +156,6 @@ public final class EventEditorViewModel {
         fields.lastDay = d.adding(days: max(span, 0))
     }
     public func setLastDay(_ d: DayKey) { fields.lastDay = d }
-    public func setTimeZone(_ tz: TimeZone) { fields.tzid = tz.identifier }
 
     /// Returns false (with nothing added) for a bad or duplicate address.
     @discardableResult
@@ -411,7 +410,6 @@ extension EventEditorViewModel {
 
     public var reminderLabel: String { fields.reminderMin.map(ReminderText.text) ?? "None" }
 
-    public func isChanged(_ keyPath: KeyPath<Fields, String>) -> Bool { isEditing && fields[keyPath: keyPath] != initial[keyPath: keyPath] }
     public var startChanged: Bool { isEditing && (fields.start != initial.start || fields.firstDay != initial.firstDay || fields.allDay != initial.allDay) }
     public var endChanged: Bool { isEditing && (fields.end != initial.end || fields.lastDay != initial.lastDay) }
     public var repeatChanged: Bool { isEditing && fields.rrule != initial.rrule }

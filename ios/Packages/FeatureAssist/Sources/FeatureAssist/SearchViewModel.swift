@@ -25,7 +25,6 @@ public struct RecentSearches: Sendable {
     }
 
     public func remove(_ term: String) { save(load().filter { $0 != term }) }
-    public func clear() { save([]) }
 }
 
 /// What search needs from the hub; `APIClient` provides both halves.

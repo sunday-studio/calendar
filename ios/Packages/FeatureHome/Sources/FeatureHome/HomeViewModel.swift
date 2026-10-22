@@ -191,7 +191,6 @@ public final class HomeViewModel {
     public var gridMonthTitle: String { format.month(monthAnchor) }
     public var gridYear: String { format.year(monthAnchor) }
     public var gridCells: [DayKey] { MonthGrid.cells(month: monthAnchor, weekStart: weekStart) }
-    public var weekdayLetters: [String] { MonthGrid.weekdayLetters(weekStart: weekStart) }
     public var isOnToday: Bool { selectedDay == today && pastFirst == nil }
 
     // MARK: Lifecycle

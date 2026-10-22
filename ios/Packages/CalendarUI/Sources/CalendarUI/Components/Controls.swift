@@ -240,7 +240,6 @@ public struct SelectField: View {
     let label: String
     let value: String
     let action: () -> Void
-    @Environment(\.dynamicTypeSize) private var typeSize
 
     public init(label: String = "View", value: String, action: @escaping () -> Void) {
         self.label = label; self.value = value; self.action = action

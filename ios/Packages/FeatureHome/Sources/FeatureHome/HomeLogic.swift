@@ -34,10 +34,6 @@ public final class HomeFormat: @unchecked Sendable {
     public func shortDate(_ day: DayKey) -> String { shortDateF.string(from: noon(day)) }
     public func month(_ day: DayKey) -> String { monthF.string(from: noon(day)) }
     public func year(_ day: DayKey) -> String { yearF.string(from: noon(day)) }
-    public func dayDateTime(_ d: Date, now: Date) -> String {
-        let a = DayKey(d, in: tz), b = DayKey(now, in: tz)
-        return a == b ? time(d) : "\(dayMonth(a)) \(time(d))"
-    }
 }
 
 public enum HomeHero: Equatable, Sendable {
@@ -87,15 +83,6 @@ public enum HomeLogic {
 
     public static func leftText(end: Date, now: Date) -> String {
         "\(minutesText(Int((end.timeIntervalSince(now) / 60).rounded(.up)))) left"
-    }
-
-    public static func joinLabel(_ kind: String) -> String {
-        switch kind {
-        case "meet": "Join Meet"
-        case "zoom": "Join Zoom"
-        case "teams": "Join Teams"
-        default: "Join call"
-        }
     }
 
     public enum HeroTarget: Equatable, Sendable {

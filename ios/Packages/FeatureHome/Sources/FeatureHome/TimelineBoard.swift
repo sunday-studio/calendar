@@ -2,7 +2,7 @@ import CalendarCore
 import CalendarUI
 import SwiftUI
 
-/// Day, 3 days and Week (boards v-day, v-three, v-week): hour grid at a 64pt pitch, event blocks in lanes,
+/// Day and 3 days (boards v-day, v-three): hour grid at a 64pt pitch, event blocks in lanes,
 /// hatched past and the amber now line for today.
 enum BoardLayout: Equatable {
     case day, three
@@ -11,7 +11,6 @@ enum BoardLayout: Equatable {
     var trailing: CGFloat { self == .day ? 16 : 0 }
     var laneGap: CGFloat { switch self { case .day: 6; case .three: 3 } }
     var labelX: CGFloat { self == .day ? 16 : 2 }
-    var compact: Bool { false }
     var dayCount: Int { switch self { case .day: 1; case .three: 3 } }
 }
 
@@ -20,7 +19,6 @@ struct TimelineBoard: View {
     let layout: BoardLayout
     let days: [DayKey]
     let openEvent: (String) -> Void
-    let openDay: (DayKey) -> Void
     /// Long-press on an empty hour.
     let newAt: (Date) -> Void
     let shift: (Int) -> Void
@@ -29,7 +27,6 @@ struct TimelineBoard: View {
     /// Called on drop with the new times (the host writes, optimistically).
     var onCommit: (AgendaItem, Date, Date) -> Void = { _, _, _ in }
     var onBlocked: (String) -> Void = { _ in }
-    /// Week: the first date of the page the board settled on.
     var zoomNS: Namespace.ID?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -206,7 +203,7 @@ struct TimelineBoard: View {
             hourRows(g, width: width, zone: zone)
             Color.clear.contentShape(Rectangle()).frame(width: width, height: g.height)
                 .onTapGesture { drag = nil }
-                .gesture(longPress(g: g, colW: colW, width: width))
+                .gesture(longPress(colW: colW))
             if layout == .day, days.contains(model.today) { pastHatch(g, width: width) }
             ForEach(Array(days.enumerated()), id: \.element) { i, d in
                 column(d, col: i, width: layout == .day ? dayW : colW - 4)
@@ -225,7 +222,7 @@ struct TimelineBoard: View {
         ZStack(alignment: .topLeading) {
             ForEach(g.hourMarks()) { m in
                 Rectangle().fill(Color.calLine).frame(width: width, height: 1).offset(y: m.y)
-                plate(DayLogic.hourLabel(m.hour, compact: false, time24: model.prefs.time24), Color.calInk2, x: layout.labelX).offset(y: m.y - 9)
+                plate(DayLogic.hourLabel(m.hour, time24: model.prefs.time24), Color.calInk2, x: layout.labelX).offset(y: m.y - 9)
                 if let zone {
                     plate(DayLogic.gutterLabel(m.date, zone: zone, locale: model.format.locale), Color.calInk3, x: 62).offset(y: m.y - 9)
                 }
@@ -265,7 +262,7 @@ struct TimelineBoard: View {
         var item = timelineItem(b)
         let isGhost = drag?.id == b.item.id
         if isGhost { item.state = .ghost; item.subtitle = nil }
-        return TimelineEventBlock(item, height: h, compact: layout.compact, singleLine: layout == .three)
+        return TimelineEventBlock(item, height: h, singleLine: layout == .three)
             .frame(width: w, height: h)
             .contentShape(Rectangle())
             .onTapGesture { if drag != nil { drag = nil } else { openEvent(b.item.id) } }
@@ -369,7 +366,7 @@ struct TimelineBoard: View {
         let x = m.x(s.col)
         let chipAbove = s.mode == .move && s.top - 32 >= 0
         return ZStack(alignment: .topLeading) {
-            TimelineEventBlock(item, height: s.height, compact: layout.compact, singleLine: layout == .three)
+            TimelineEventBlock(item, height: s.height, singleLine: layout == .three)
                 .frame(width: m.w, height: s.height)
                 .shadow(color: .black.opacity(0.4), radius: 12, y: 8)
             if s.mode == .resize || s.moved == false || s.mode == .move {
@@ -424,7 +421,7 @@ struct TimelineBoard: View {
 
     // MARK: Gestures + scroll
 
-    private func longPress(g: DayGrid, colW: CGFloat, width: CGFloat) -> some Gesture {
+    private func longPress(colW: CGFloat) -> some Gesture {
         LongPressGesture(minimumDuration: 0.4).sequenced(before: DragGesture(minimumDistance: 0))
             .onEnded { value in
                 guard case .second(true, let drag?) = value else { return }

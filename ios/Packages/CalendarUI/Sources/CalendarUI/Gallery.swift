@@ -35,7 +35,7 @@ struct ControlsDemo: View {
     @State private var colour: AccountColor? = .rose
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.l) {
-            SegmentedControl(["Agenda", "Day", "3 days", "Week"], selection: $seg).padding(.horizontal, Spacing.gutter)
+            SegmentedControl(["Agenda", "Day", "3 days"], selection: $seg).padding(.horizontal, Spacing.gutter)
             ColourSwatchRow(selection: $colour)
             VStack(spacing: 0) {
                 NavRow("Time zones", value: "Accra · New York", isFirst: true)

@@ -173,7 +173,6 @@ struct HomeView: View {
                     .transition(Motion.transition(reduceMotion: reduceMotion, edge: .top))
             }
             TimelineBoard(model: day, layout: boardLayout, days: boardDays, openEvent: openEvent,
-                          openDay: { d in model.select(d); mode = .day },
                           newAt: { newEventAt($0) },
                           shift: { n in Haptics.shared.play(.dayPage); model.select(model.selectedDay.adding(days: n)) },
                           canWrite: model.connectionBanner == nil && moveEvent != nil,

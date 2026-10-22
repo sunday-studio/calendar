@@ -2,27 +2,10 @@ import CalendarCore
 import Foundation
 
 /// Pure text for the event detail screen (no SwiftUI). All inputs are explicit so tests pin time zone, locale and clock.
-public struct EventTimeText: Equatable, Sendable {
-    public struct OtherZone: Equatable, Sendable {
-        /// "New York (EDT)"
-        public var label: String
-        /// "05:00\u{2013}05:30", prefixed with the date when it falls on another day.
-        public var line: String
-    }
-    public var dateLine: String
-    public var timeLine: String
-    public var duration: String?
-    public var otherZone: OtherZone?
-    public var accessibility: String
-}
-
 public final class EventTimeFormat: @unchecked Sendable {
     public let tz: TimeZone
     public let locale: Locale
     private let timeF: DateFormatter
-    private let fullDayF: DateFormatter
-    private let shortDayF: DateFormatter
-    private let rangeDayF: DateFormatter
 
     public init(tz: TimeZone, locale: Locale = .current) {
         self.tz = tz; self.locale = locale
@@ -32,17 +15,14 @@ public final class EventTimeFormat: @unchecked Sendable {
             f.setLocalizedDateFormatFromTemplate(template)
             return f
         }
-        timeF = make("jmm", tz); fullDayF = make("EEEEdMMMM", tz); shortDayF = make("EEEdMMM", tz); rangeDayF = make("dMMM", tz)
+        timeF = make("jmm", tz)
     }
 
-    private func noon(_ d: DayKey) -> Date { d.startOfDay(in: tz).addingTimeInterval(12 * 3600) }
     func time(_ d: Date, in zone: TimeZone? = nil) -> String {
         guard let zone, zone.identifier != tz.identifier else { return timeF.string(from: d) }
         let f = DateFormatter(); f.locale = locale; f.timeZone = zone; f.setLocalizedDateFormatFromTemplate("jmm")
         return f.string(from: d)
     }
-    func shortDay(_ d: DayKey) -> String { shortDayF.string(from: noon(d)) }
-    func fullDay(_ d: DayKey) -> String { fullDayF.string(from: noon(d)) }
 
     // MARK: Durations
 
@@ -53,68 +33,6 @@ public final class EventTimeFormat: @unchecked Sendable {
         if mins >= 24 * 60 * 2 && mins % (24 * 60) == 0 { return "\(mins / (24 * 60)) days" }
         let h = mins / 60, m = mins % 60
         return m == 0 ? "\(h) h" : "\(h) h \(m) min"
-    }
-
-    // MARK: Main text
-
-    public func text(for item: AgendaItem) -> EventTimeText {
-        if item.allDay { return allDayText(item) }
-        guard let s = item.start else {
-            return EventTimeText(dateLine: "", timeLine: "", duration: nil, otherZone: nil, accessibility: "")
-        }
-        let e = item.end ?? s
-        let hasEnd = e > s
-        let d1 = DayKey(s, in: tz)
-        let lastDay = DayKey(hasEnd ? e.addingTimeInterval(-0.001) : s, in: tz)
-        let multi = lastDay > d1
-        let dateLine: String
-        let timeLine: String
-        if multi {
-            dateLine = "\(shortDay(d1)) \u{2013} \(shortDay(lastDay))"
-            timeLine = "\(time(s)) \u{2013} \(time(e))"
-        } else {
-            dateLine = fullDay(d1)
-            timeLine = hasEnd ? "\(time(s))\u{2013}\(time(e))" : time(s)
-        }
-        let dur = hasEnd ? Self.durationText(e.timeIntervalSince(s)) : nil
-        let other = otherZone(item, start: s, end: e, hasEnd: hasEnd)
-        var spoken = multi ? "\(dateLine), \(time(s)) to \(time(e))" : "\(dateLine), \(time(s))" + (hasEnd ? " to \(time(e))" : "")
-        if let dur { spoken += ", \(dur)" }
-        if let other { spoken += ". In \(other.label): \(other.line)" }
-        return EventTimeText(dateLine: dateLine, timeLine: timeLine, duration: dur, otherZone: other, accessibility: spoken)
-    }
-
-    private func allDayText(_ item: AgendaItem) -> EventTimeText {
-        let first = DayKey(item.date ?? item.endDate ?? "0000-00-00")
-        var last = first
-        if let end = item.endDate { let l = DayKey(end).adding(days: -1); if l > first { last = l } }
-        let n = first.days(to: last) + 1
-        let dateLine = n > 1 ? "\(shortDay(first)) \u{2013} \(shortDay(last))" : fullDay(first)
-        let dur = n > 1 ? "\(n) days" : nil
-        return EventTimeText(dateLine: dateLine, timeLine: "All day", duration: dur, otherZone: nil,
-                             accessibility: "\(dateLine), all day" + (dur.map { ", \($0)" } ?? ""))
-    }
-
-    private func otherZone(_ item: AgendaItem, start s: Date, end e: Date, hasEnd: Bool) -> EventTimeText.OtherZone? {
-        guard let id = item.tzid, let zone = TimeZone(identifier: id) else { return nil }
-        guard zone.secondsFromGMT(for: s) != tz.secondsFromGMT(for: s) else { return nil }
-        var cal = DayKey.calendar(zone)
-        cal.timeZone = zone
-        let sameDayThere = DayKey(s, calendar: cal) == DayKey(hasEnd ? e.addingTimeInterval(-0.001) : s, calendar: cal)
-        var line = hasEnd ? "\(time(s, in: zone))\u{2013}\(time(e, in: zone))" : time(s, in: zone)
-        let dayThere = DayKey(s, calendar: cal)
-        if dayThere != DayKey(s, in: tz) || !sameDayThere {
-            let f = DateFormatter(); f.locale = locale; f.timeZone = zone; f.setLocalizedDateFormatFromTemplate("EEEdMMM")
-            line = "\(f.string(from: s)) \(line)"
-        }
-        return .init(label: Self.zoneLabel(zone, at: s), line: line)
-    }
-
-    /// "New York (EDT)"
-    public static func zoneLabel(_ zone: TimeZone, at date: Date) -> String {
-        let city = zone.identifier.split(separator: "/").last.map { $0.replacingOccurrences(of: "_", with: " ") } ?? zone.identifier
-        let abbr = zone.abbreviation(for: date) ?? ""
-        return abbr.isEmpty ? city : "\(city) (\(abbr))"
     }
 
     // MARK: Relative
@@ -171,19 +89,6 @@ public enum ResponseStyle: Equatable, Sendable {
         default: self = .noReply
         }
     }
-
-    public var word: String {
-        switch self { case .going: "Going"; case .declined: "Declined"; case .maybe: "Maybe"; case .noReply: "No reply" }
-    }
-
-    public var symbol: String {
-        switch self {
-        case .going: "checkmark.circle.fill"
-        case .declined: "xmark.circle.fill"
-        case .maybe: "questionmark.circle.fill"
-        case .noReply: "circle.dashed"
-        }
-    }
 }
 
 public struct GuestRow: Equatable, Sendable, Identifiable {
@@ -194,15 +99,6 @@ public struct GuestRow: Equatable, Sendable, Identifiable {
     public var isOrganizer: Bool
     public var isSelf: Bool
     public var isOptional: Bool
-
-    public var accessibilityLabel: String {
-        var parts = [name]
-        if isSelf { parts.append("you") }
-        if isOrganizer { parts.append("organiser") }
-        if isOptional { parts.append("optional") }
-        parts.append(response.word)
-        return parts.joined(separator: ", ")
-    }
 }
 
 public enum PeopleLogic {
@@ -228,17 +124,6 @@ public enum PeopleLogic {
     static func displayName(_ name: String?, _ email: String) -> String {
         if let n = name?.trimmingCharacters(in: .whitespaces), !n.isEmpty { return n }
         return email
-    }
-
-    /// "5 people \u{00B7} 3 going \u{00B7} 1 declined"
-    public static func summary(_ rows: [GuestRow]) -> String {
-        guard !rows.isEmpty else { return "" }
-        var parts = [rows.count == 1 ? "1 person" : "\(rows.count) people"]
-        for (style, word) in [(ResponseStyle.going, "going"), (.maybe, "maybe"), (.declined, "declined"), (.noReply, "no reply")] {
-            let n = rows.filter { $0.response == style }.count
-            if n > 0 { parts.append("\(n) \(word)") }
-        }
-        return parts.joined(separator: " \u{00B7} ")
     }
 }
 
@@ -295,19 +180,6 @@ public enum DescriptionText {
         }
         return s.replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    /// Text with tappable links (http, https, mailto, tel).
-    public static func linkified(_ raw: String) -> AttributedString {
-        let text = plain(raw)
-        var out = AttributedString(text)
-        guard let det = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return out }
-        let ns = text as NSString
-        for m in det.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
-            guard let url = m.url, let r = Range(m.range, in: text), let ar = Range(r, in: out) else { continue }
-            out[ar].link = url
-        }
-        return out
     }
 
     /// First join link in free text (for events without a structured join).

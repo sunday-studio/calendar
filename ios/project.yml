@@ -92,8 +92,6 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         UIAppFonts:
-          - Newsreader.ttf
-          - Newsreader-Italic.ttf
           - SchibstedGrotesk.ttf
           - DMMono-Regular.ttf
           - DMMono-Medium.ttf
@@ -134,8 +132,6 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UIAppFonts:
-          - Newsreader.ttf
-          - Newsreader-Italic.ttf
           - SchibstedGrotesk.ttf
           - DMMono-Regular.ttf
           - DMMono-Medium.ttf

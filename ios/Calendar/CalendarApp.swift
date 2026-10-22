@@ -1,7 +1,6 @@
 import CalendarCore
 import CalendarUI
 import FeatureAccounts
-import FeatureAssist
 import FeatureEvent
 import FeatureHome
 import FeatureSettings

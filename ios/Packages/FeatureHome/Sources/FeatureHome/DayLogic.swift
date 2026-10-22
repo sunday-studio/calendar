@@ -81,11 +81,11 @@ public enum DayLogic {
         return f.string(from: date)
     }
 
-    /// Hour label for the grid's left column: "09:00" / "09" (week) on a 24-hour clock, "9 AM" / "9" on a 12-hour one.
-    public static func hourLabel(_ hour: Int, compact: Bool, time24: Bool) -> String {
-        if time24 { return String(format: compact ? "%02d" : "%02d:00", hour) }
+    /// Hour label for the grid's left column: "09:00" on a 24-hour clock, "9 AM" on a 12-hour one.
+    public static func hourLabel(_ hour: Int, time24: Bool) -> String {
+        if time24 { return String(format: "%02d:00", hour) }
         let h = hour % 12 == 0 ? 12 : hour % 12
-        return compact ? "\(h)" : "\(h) \(hour < 12 ? "AM" : "PM")"
+        return "\(h) \(hour < 12 ? "AM" : "PM")"
     }
 
     public static func accessibilityLabel(_ b: DayBlock, format: HomeFormat) -> String {
@@ -97,37 +97,6 @@ public enum DayLogic {
         else if item.myResponse == "tentative" { parts.append("maybe") }
         if b.columnCount > 1 { parts.append("overlaps another event") }
         return parts.joined(separator: ", ")
-    }
-
-    public static func dayAccessibility(_ day: DayKey, content: DayContent, format: HomeFormat) -> String {
-        let n = content.allDay.count + content.blocks.count
-        let head = "\(format.weekday(day)) \(format.dayMonth(day))"
-        return n == 0 ? "\(head), no events" : "\(head), \(n == 1 ? "1 event" : "\(n) events")"
-    }
-
-    /// The seven days of the week containing `day`, starting on `weekStart` (0 = Sunday).
-    public static func week(containing day: DayKey, weekStart: Int) -> [DayKey] {
-        let back = (day.weekday - weekStart + 7) % 7
-        let first = day.adding(days: -back)
-        return (0..<7).map { first.adding(days: $0) }
-    }
-
-    /// Synthetic busy day for the stress screen: `count` blocks, many overlapping.
-    public static func stressItems(day: DayKey, tz: TimeZone, count: Int, seed: UInt64 = 7) -> [AgendaItem] {
-        var state = seed
-        func next(_ n: Int) -> Int {
-            state = state &* 6364136223846793005 &+ 1442695040888963407
-            return Int((state >> 33) % UInt64(n))
-        }
-        let base = day.startOfDay(in: tz)
-        let colors = AccountColor.allCases.map(\.rawValue)
-        return (0..<count).map { k in
-            let s = base.addingTimeInterval(TimeInterval(next(22 * 4) * 900 + 3600))
-            let e = s.addingTimeInterval(TimeInterval((1 + next(8)) * 900))
-            return AgendaItem(id: "stress\(k)", eventId: "stress\(k)", calendarId: "c", accountId: "a", color: colors[k % colors.count],
-                              title: "Stress block \(k)", allDay: false, start: s, end: e, tzid: tz.identifier,
-                              location: k % 3 == 0 ? "Room \(k)" : nil, myResponse: "accepted", canEdit: true)
-        }
     }
 }
 

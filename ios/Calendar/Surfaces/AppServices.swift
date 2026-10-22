@@ -36,8 +36,6 @@ final class AppServices: @unchecked Sendable {
         return Bundle(env: env, scheduler: scheduler, live: live)
     }
 
-    func environment(for config: HubConfig) -> AppEnvironment { services(for: config).env }
-
     /// Environment for the stored hub, or nil when not paired.
     func current() -> Bundle? { HubConfigStore().load().map(services(for:)) }
 

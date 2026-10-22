@@ -94,26 +94,3 @@ public struct DayGlance: View {
     }
 }
 
-/// Search field that lives in the nav row (canvas f-open): h44, 1pt ink border, dim placeholder.
-public struct SearchField: View {
-    @Binding var text: String
-    let placeholder: String
-    @FocusState private var focused: Bool
-
-    public init(text: Binding<String>, placeholder: String = "Search events and people") {
-        _text = text
-        self.placeholder = placeholder
-    }
-
-    public var body: some View {
-        TextField(placeholder, text: $text)
-            .font(CalFont.body).foregroundStyle(Color.calInk)
-            .focused($focused)
-            .submitLabel(.search)
-            .padding(.horizontal, 14)
-            .frame(height: 44)
-            .background(Color.calSurface)
-            .overlay(Rectangle().strokeBorder(focused ? Color.calInk : Color.calBorder, lineWidth: 1))
-            .onAppear { focused = true }
-    }
-}

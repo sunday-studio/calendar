@@ -1,5 +1,4 @@
 import CalendarCore
-import CalendarUI
 import Foundation
 import Observation
 
@@ -40,11 +39,8 @@ public final class DayViewModel {
 
     public var windowFirst: DayKey { today.adding(days: -SyncWindow.daysBefore) }
     public var windowLast: DayKey { today.adding(days: SyncWindow.daysAfter) }
-    public var days: [DayKey] { windowFirst.through(windowLast) }
 
     public func content(for day: DayKey) -> DayContent { contents[day] ?? .empty }
-
-    public func clampToWindow(_ day: DayKey) -> DayKey { min(max(day, windowFirst), windowLast) }
 
     // MARK: Lifecycle
 

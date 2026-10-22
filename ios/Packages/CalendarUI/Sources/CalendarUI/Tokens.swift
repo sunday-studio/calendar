@@ -13,10 +13,6 @@ public struct TokenColor: Sendable, Equatable {
         self.dark = dark
     }
 
-    public func hex(for style: UIUserInterfaceStyle) -> UInt32 {
-        style == .dark ? dark : light
-    }
-
     public var uiColor: UIColor {
         let l = light, d = dark
         return UIColor { trait in UIColor(hex: trait.userInterfaceStyle == .dark ? d : l) }
@@ -69,10 +65,6 @@ public enum Theme {
     public static let accentInk = accent
     /// "Needs you". Same amber.
     public static let amber = accent
-    /// Retired tints: the canvas has no tinted fills. Kept as aliases so callers compile; do not use in new code.
-    public static let amberTint = surface
-    public static let redTint = surface
-    public static let greenTint = surface
 
     public static let red = TokenColor(light: 0xB3261E, dark: 0xFF8F8F)
     /// OK status square / check: the moss account colour (canvas `a3`).
@@ -81,20 +73,14 @@ public enum Theme {
     /// Toast: ink fill, bg text.
     public static let inverse = ink
     public static let inverseInk = bg
-    public static let inverseDim = ink2
 
     /// Ink drawn on a bright account-colour block. The block always uses the bright value, so this is constant.
     public static let onAccountColor = TokenColor(light: 0x0A0A0B, dark: 0x0A0A0B)
-    /// Ink used on amber fills (now-line label).
-    public static let onBrass = TokenColor(light: 0x0A0A0B, dark: 0x0A0A0B)
     /// Text on amber fills: light amber (#8A5A00) needs a light ink (5.3:1); canvas draws #0A0A0B (3.3:1). DECISIONS Q10.
     public static let onAmber = TokenColor(light: 0xF1F1EE, dark: 0x0A0A0B)
 
     public static let scrim = TokenColor(light: 0x0A0A0B, dark: 0x000000)
     public static let scrimAlpha: (light: Double, dark: Double) = (0.34, 0.62)
-    /// Past-time hatch ink (canvas `.past` uses `line`).
-    public static let shadeInk = line
-    public static let shadeAlpha: (light: Double, dark: Double) = (0.8, 0.8)
 
     /// Flip-cell faces (canvas `.fl`): cell, cell inside the Next block, split line, glyph.
     public static let flipCell = TokenColor(light: 0x26262A, dark: 0x26262A)
@@ -115,13 +101,9 @@ public extension Color {
     static var calInk2: Color { Theme.ink2.color }
     static var calInk3: Color { Theme.ink3.color }
     static var calAccent: Color { Theme.accent.color }
-    static var calAccentInk: Color { Theme.accentInk.color }
     static var calAmber: Color { Theme.amber.color }
-    static var calAmberTint: Color { Theme.amberTint.color }
     static var calRed: Color { Theme.red.color }
-    static var calRedTint: Color { Theme.redTint.color }
     static var calGreen: Color { Theme.green.color }
-    static var calGreenTint: Color { Theme.greenTint.color }
 }
 
 /// The eight account colours (design: "cobalt, rose, ochre, mauve, verdigris, slate, moss, clay").
@@ -156,7 +138,6 @@ public enum AccountColor: String, CaseIterable, Sendable, Identifiable {
 
 /// 4-pt spacing scale. `gutter` is the screen edge inset used by every full-width row.
 public enum Spacing {
-    public static let xxs: CGFloat = 2
     public static let xs: CGFloat = 4
     public static let s: CGFloat = 8
     public static let m: CGFloat = 12

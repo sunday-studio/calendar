@@ -90,9 +90,6 @@ public actor WriteCoordinator {
         self.makeKey = makeKey; self.retryDelays = retryDelays
     }
 
-    /// A fresh key for a new user action; callers keep it to re-send the SAME action after a failure.
-    public nonisolated func newKey() -> String { makeKey() }
-
     // MARK: Actions
 
     public func create(_ draft: EventDraft, key: String? = nil, mode: WriteMode = .optimistic) async -> WriteOutcome {
