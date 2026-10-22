@@ -1,0 +1,26 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Golden//Folded//EN
+BEGIN:VEVENT
+UID:folded@example.test
+DTSTART:20261023T150000Z
+DTEND:20261023T160000Z
+SUMMARY:Café ☕ planning with a very long title that has to be folded acro
+ ss several lines so that the parser must unfold them properly 日本語 🎉
+DESCRIPTION:Agenda\n1. Intro\, goals\; scope\nJoin: https://us02web.zoom.us/j/123456789?pwd=abc
+LOCATION:Room 4\, Floor 2
+URL:https://example.test/events/42
+ORGANIZER;CN="Ama Mensah":mailto:Ama@Example.test
+ATTENDEE;CN=Kofi;PARTSTAT=ACCEPTED;ROLE=REQ-PARTICIPANT:mailto:kofi@example.test
+ATTENDEE;CN=Esi;PARTSTAT=TENTATIVE;ROLE=OPT-PARTICIPANT:mailto:esi@example.test
+ATTENDEE;CUTYPE=ROOM;PARTSTAT=ACCEPTED:mailto:room4@example.test
+ATTENDEE:mailto:Ama@Example.test
+END:VEVENT
+BEGIN:VEVENT
+UID:meet@example.test
+DTSTART:20261024T150000Z
+DTEND:20261024T160000Z
+SUMMARY:Meet call
+X-GOOGLE-CONFERENCE:https://meet.google.com/abc-defg-hij
+END:VEVENT
+END:VCALENDAR

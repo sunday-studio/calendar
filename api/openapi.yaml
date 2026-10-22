@@ -1,0 +1,1636 @@
+openapi: 3.1.0
+info:
+  title: Calendar hub API
+  version: "1.0.0"
+  description: |
+    v1 contract through milestone M4 (ENGINEERING.md section 7). Hand-written DTOs in Go
+    (server/internal/api/dto.go) and Swift mirror this file; a contract test validates fixtures.
+    JSON is camelCase. Instants are RFC 3339 UTC plus `tzid`; all-day events use `date` and `endDate`
+    (exclusive end). Additive changes only within v1.
+servers:
+  - url: /
+security:
+  - bearer: []
+tags:
+  - name: meta
+  - name: agenda
+  - name: events
+  - name: accounts
+  - name: calendars
+  - name: sync
+  - name: settings
+  - name: tokens
+  - name: assist
+  - name: automations
+  - name: devices
+  - name: live
+  - name: mcp
+
+paths:
+  /health:
+    get:
+      tags: [meta]
+      security: []
+      operationId: health
+      summary: Liveness probe (unauthenticated)
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties: { status: { type: string, const: ok } }
+        "503": { $ref: "#/components/responses/Error" }
+  /metrics:
+    get:
+      tags: [meta]
+      operationId: metrics
+      summary: Prometheus text metrics
+      description: "Read scope. Gauges: revision, database size, SSE clients, events, failed syncs (24 h), accounts by status, last backup age; counter: requests by status class."
+      responses:
+        "200":
+          description: ok
+          content:
+            text/plain:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /v1/hello:
+    get:
+      tags: [meta]
+      operationId: hello
+      summary: Pairing check and API version
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Hello" }
+        "401": { $ref: "#/components/responses/Error" }
+  /v1/status:
+    get:
+      tags: [meta]
+      operationId: status
+      summary: Hub version, rev, db size, SSE clients, per-account sync state, secret-expiry warnings
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Status" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /v1/agenda:
+    get:
+      tags: [agenda]
+      operationId: agenda
+      summary: Merged agenda items for a window
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date-time }, description: "Inclusive RFC 3339 instant" }
+        - { name: to, in: query, required: true, schema: { type: string, format: date-time }, description: "Exclusive RFC 3339 instant" }
+        - { name: calendars, in: query, schema: { type: string }, description: "Comma separated calendar ids; default all visible" }
+        - { name: If-None-Match, in: header, schema: { type: string } }
+      responses:
+        "200":
+          description: ok
+          headers:
+            ETag: { schema: { type: string }, description: 'Weak ETag derived from rev and query, e.g. W/"rev-42-ab12cd34"' }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgendaResponse" }
+        "304": { description: Not modified }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /v1/events:
+    get:
+      tags: [events]
+      operationId: listEvents
+      summary: List or search events
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: calendar, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string }, description: Full-text search }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      description: |
+        Occurrences ordered by start. `from` and `to` are both required unless `q` is set. `q` is a full-text
+        search (title, location, description, attendees; every word is a prefix term, ANDed) and returns each
+        event once (its first occurrence inside the window). Without `calendar`, only visible calendars are searched.
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventPage" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [events]
+      operationId: createEvent
+      summary: Create an event
+      description: |
+        Provider first, mirror second: the event is created at the provider and only then stored on the hub.
+        With an `Idempotency-Key` a retried request never creates a second event (the hub replays the stored
+        response, and the provider id is derived from the key so even an ambiguous failure is safe to retry).
+        `when.start` is local wall time in `when.tzid` (default: the calendar's zone). Timed events default to
+        60 minutes. Guests are emails; the signed-in user is added by the provider. `reminderMin` is stored on the hub.
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EventInput" }
+      responses:
+        "201":
+          description: created (Location header points at the event)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Event" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "424": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+  /v1/events/{id}:
+    parameters: [{ $ref: "#/components/parameters/EventId" }]
+    get:
+      tags: [events]
+      operationId: getEvent
+      summary: Get one event
+      description: "`id` may be an eventId or an occurrence id (eventId:rkey)."
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Event" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [events]
+      operationId: patchEvent
+      summary: Edit an event (omitted = untouched, null = clear)
+      description: |
+        `scope` (default `this`) applies to repeating events: `this` edits one occurrence (an exception),
+        `following` splits the series at that occurrence (the later series gets the edit; later one-off overrides
+        are dropped, as Google does), `all` edits the whole series. On a non-repeating event `scope` is ignored.
+        For `all`/`following` a `when` describes the new time of the occurrence you addressed: `all` shifts the
+        series by the same wall-clock difference. Changing `recurrence` with `scope=this` on a repeating event is
+        a 400. Send only the guests you want in `attendees`; the organizer and the signed-in user are always kept.
+        Concurrency: `If-Match: "<version>"` older than the hub's copy is 412 `precondition_failed`; if the hub copy
+        matches but the provider's changed elsewhere the hub refreshes its mirror and answers 409 `conflict`. Both
+        carry `error.current` (the latest Event). A provider failure is 502 and changes nothing (no half-saved state).
+        An event deleted elsewhere is 404 (no `current`). With only `reminderMin` the change is hub-only.
+        Idempotency: the same key + same request replays the stored response (`Idempotent-Replayed: true`);
+        the same key with a different request is 422.
+      parameters:
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatch" }
+        - { $ref: "#/components/parameters/Scope" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Patch" }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Event" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "412": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "424": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [events]
+      operationId: deleteEvent
+      summary: Delete an event
+      description: Same `scope`, `If-Match` and error rules as PATCH. Deleting one occurrence of a series cancels just that instance.
+      parameters:
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatch" }
+        - { $ref: "#/components/parameters/Scope" }
+      responses:
+        "204": { description: deleted }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "412": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "424": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+  /v1/events/{id}/rsvp:
+    parameters: [{ $ref: "#/components/parameters/EventId" }]
+    post:
+      tags: [events]
+      operationId: rsvpEvent
+      summary: Respond to an invitation
+      description: |
+        `scope` is `this` (default) or `all`; `following` is a 400. `note` is sent to the organizer.
+        403 when the event cannot be replied to (`canRSVP` false). Same 409/412/422 rules as PATCH.
+      parameters:
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatch" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [response]
+              properties:
+                response: { type: string, enum: [accepted, declined, tentative] }
+                note: { type: string }
+                scope: { $ref: "#/components/schemas/Scope" }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Event" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "412": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "424": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+  /v1/events/{id}/meet:
+    parameters: [{ $ref: "#/components/parameters/EventId" }]
+    post:
+      tags: [events]
+      operationId: addMeet
+      summary: Add a Google Meet link
+      description: |
+        403 unless `canAddConference`. On a repeating event the link is added to the whole series.
+        The hub waits briefly for Google to produce the link; if it is slow the link arrives with the next sync
+        (the event is returned without `join` until then).
+      parameters:
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatch" }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Event" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "412": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "424": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+  /v1/events/{id}/move:
+    parameters: [{ $ref: "#/components/parameters/EventId" }]
+    post:
+      tags: [events]
+      operationId: moveEvent
+      summary: Move an event to another calendar
+      description: |
+        Within one account the event keeps its id (a repeating series moves with its exceptions). To a calendar of
+        another account the hub creates the copy first (guests are not re-notified) and deletes the original only
+        after that succeeded; the response is a new event with a new id and the old id becomes 404. A repeating
+        event cannot move to another account (400). 403 when the destination calendar is read-only.
+      parameters:
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatch" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [calendarId]
+              properties: { calendarId: { type: string } }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Event" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "412": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "424": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+  /v1/events/{id}/reminder:
+    parameters: [{ $ref: "#/components/parameters/EventId" }]
+    put:
+      tags: [events]
+      operationId: setReminder
+      summary: Override the reminder for one event
+      description: |
+        Hub-only (nothing is sent to the provider). With an occurrence id (`eventId:rkey`) the override is for that
+        occurrence; with a bare `eventId` it applies to every occurrence of the event unless one has its own.
+        `null` clears the override. `minutesBefore` is 0..40320.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [minutesBefore]
+              properties:
+                minutesBefore: { type: [integer, "null"], minimum: 0, maximum: 40320, description: "null clears the override" }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Event" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /v1/calendars:
+    get:
+      tags: [calendars]
+      operationId: listCalendars
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Calendar" } }
+        "401": { $ref: "#/components/responses/Error" }
+  /v1/calendars/{id}:
+    patch:
+      tags: [calendars]
+      operationId: patchCalendar
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                visible: { type: boolean }
+                colorOverride: { type: [string, "null"] }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Calendar" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /v1/freebusy:
+    get:
+      tags: [agenda]
+      operationId: freeBusy
+      summary: Merged busy intervals
+      description: Busy events on visible calendars (declined and transparent events excluded), merged and clipped to the window.
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FreeBusy" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /v1/accounts:
+    get:
+      tags: [accounts]
+      operationId: listAccounts
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Account" } }
+  /v1/accounts/ics:
+    post:
+      tags: [accounts]
+      operationId: addIcsAccount
+      summary: Subscribe to a read-only ICS (iCalendar) feed
+      description: |
+        Requires admin scope. The hub fetches and parses the URL first (https, or webcal which becomes https; 20 s timeout,
+        20 MB cap, at most 3 redirects; loopback, private and link-local addresses are refused unless the hub sets
+        `CALENDAR_ICS_ALLOW_PRIVATE=1`). On any failure it answers 422 with `field: "url"` and a plain message, and saves nothing.
+        The URL is stored sealed and is never returned or logged: the account's `email` is only the feed's host.
+        The account has one calendar with `access: reader`; every event has `canEdit`, `canRSVP` and `canAddConference` false,
+        so writes to it answer 403 `forbidden`. The feed is re-polled every 15 minutes (conditional GET). Adding a URL that is
+        already connected returns the existing account (200).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              additionalProperties: false
+              properties:
+                url: { type: string, description: "https:// or webcal:// address of the .ics file" }
+                name: { type: string, description: "Defaults to the feed's own name, else its host" }
+                color: { type: string, description: Palette key }
+      responses:
+        "200":
+          description: this feed was already connected
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+        "201":
+          description: connected; the first sync runs within seconds
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /v1/accounts/connect:
+    post:
+      tags: [accounts]
+      operationId: connectAccount
+      summary: Start in-app OAuth sign-in
+      description: Requires admin scope.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider]
+              properties:
+                provider: { type: string, enum: [google, microsoft] }
+                redirectUri: { type: string, description: "Ignored; the hub always returns to calendar://connected" }
+                reauthAccountId: { type: string, description: "Re-run sign-in for this account; the signed-in identity must match" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [authUrl, state]
+                properties:
+                  authUrl: { type: string, format: uri }
+                  state: { type: string }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+  /auth/google/callback:
+    get:
+      tags: [accounts]
+      operationId: googleCallback
+      summary: OAuth redirect target (unauthenticated, guarded by single-use state)
+      description: "302 to calendar://connected?account=ID&status=connecting, or calendar://connected?error=CODE (invalid_state, exchange_failed, identity_mismatch, no_refresh_token, access_denied, internal)."
+      security: []
+      parameters:
+        - { name: state, in: query, schema: { type: string } }
+        - { name: code, in: query, schema: { type: string } }
+        - { name: error, in: query, schema: { type: string } }
+      responses:
+        "302": { description: redirect to the app URL scheme }
+  /v1/accounts/{id}:
+    parameters: [{ $ref: "#/components/parameters/AccountId" }]
+    get:
+      tags: [accounts]
+      operationId: getAccount
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [accounts]
+      operationId: patchAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName: { type: string }
+                color: { type: string, description: Palette key }
+                url: { type: string, description: "ICS accounts only, admin scope: the new feed address (this is how an ICS account is reconnected). Validated like POST /v1/accounts/ics; on failure 422 field url and nothing changes." }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [accounts]
+      operationId: deleteAccount
+      summary: Disconnect an account and drop its cached data
+      responses:
+        "204": { description: deleted }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/accounts/{id}/reconnect:
+    parameters: [{ $ref: "#/components/parameters/AccountId" }]
+    post:
+      tags: [accounts]
+      operationId: reconnectAccount
+      summary: Re-run sign-in for an account in needs_reauth
+      description: ICS accounts never need sign-in; for them this answers 422 (field url) and the feed is changed with PATCH url instead.
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [authUrl, state]
+                properties:
+                  authUrl: { type: string, format: uri }
+                  state: { type: string }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/sync:
+    post:
+      tags: [sync]
+      operationId: triggerSync
+      summary: Request a sync now (asynchronous)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { accountId: { type: string } }
+      responses:
+        "202":
+          description: accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [queued]
+                properties: { queued: { type: integer, minimum: 0 } }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /v1/sync/runs:
+    get:
+      tags: [sync]
+      operationId: syncRuns
+      summary: Recent sync runs, newest first (kept 30 days)
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 20 } }
+        - { name: accountId, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/SyncRun" } }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /v1/settings:
+    get:
+      tags: [settings]
+      operationId: getSettings
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settings" }
+    put:
+      tags: [settings]
+      operationId: putSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Settings" }
+      responses:
+        "200":
+          description: saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settings" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /v1/stream:
+    get:
+      tags: [live]
+      operationId: stream
+      summary: Server-sent events
+      description: |
+        Resume with `Last-Event-ID`. Each frame is `id: <n>`, `event: <name>`, `data: <json>`.
+        Payloads carry numbers and ids only; the client decides what to fetch. `ping` every 20 s.
+        On connect the hub sends the current `rev` unless `Last-Event-ID` already equals it. `id` is the
+        rev (not sent on `ping`). A client that cannot keep up is disconnected and should reconnect.
+      parameters:
+        - { name: Last-Event-ID, in: header, schema: { type: string } }
+      responses:
+        "200":
+          description: event stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+              x-event-data: { $ref: "#/components/schemas/SseEvents" }
+
+  /v1/devices/self/push:
+    put:
+      tags: [devices]
+      operationId: registerPush
+      summary: Register this device for APNs
+      description: |
+        Read scope is enough. A device has one live APNs token: registering replaces the earlier one for the same API token.
+        Pushes carry ids and counters only, never event titles: `{k:"sync",rev}` (silent, content-available; an event in the
+        next 48 h, a calendar or a setting changed), `{k:"moved"|"cancelled",eventId,rev}` and `{k:"changed",rev}` (alert,
+        mutable-content, generic text; fetch `GET /v1/events/{id}` for the wording), `{k:"reauth",accountId}` (alert) and
+        `{k:"summary",date}` (alert; fetch `GET /v1/summary?date=`) and `{k:"reminder",eventId,occurrenceId}` (alert, all-day events only; fetch `GET /v1/events/{occurrenceId}`). Changes you make yourself never alert you, other devices
+        still get the silent `sync`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [apnsToken, environment]
+              properties:
+                apnsToken: { type: string, description: "hex device token" }
+                environment: { type: string, enum: [sandbox, production] }
+                bundleId: { type: string }
+      responses:
+        "204": { description: registered }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [devices]
+      operationId: unregisterPush
+      summary: Stop pushes to this device
+      responses:
+        "204": { description: removed }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /v1/summary:
+    get:
+      tags: [events]
+      operationId: getSummary
+      summary: Morning summary for one local day
+      description: "`date` is YYYY-MM-DD in the user's zone (default today). `title`/`body` are ready to show."
+      parameters:
+        - { name: date, in: query, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [date, count, titles, needsReply, title, body]
+                properties:
+                  date: { type: string, format: date }
+                  count: { type: integer }
+                  firstStart: { type: [string, "null"], description: "HH:MM of the first timed event" }
+                  titles: { type: array, items: { type: string }, maxItems: 5 }
+                  needsReply: { type: integer }
+                  free:
+                    type: [object, "null"]
+                    description: "Longest free stretch (>= 60 min) inside working hours"
+                    properties: { start: { type: string }, end: { type: string } }
+                  title: { type: string }
+                  body: { type: string }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /v1/freetime:
+    post:
+      tags: [assist]
+      operationId: findFreeTime
+      summary: Find free slots
+      description: |
+        Deterministic: busy occurrences of visible calendars (declined events and non-busy events ignored; an
+        all-day busy event blocks its whole local day), inside working hours unless `ignoreWorkingHours`. Slots start
+        on a 15-minute grid and never in the past. `best` marks the tightest fit. When nothing fits, `closest` has the
+        first fitting slot in the 14 days after the window (`kind` later) and the longest shorter gap inside it (`shorter`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [durationMin, from, to]
+              properties:
+                durationMin: { type: integer, minimum: 5, maximum: 1440 }
+                from: { type: string, format: date-time }
+                to: { type: string, format: date-time, description: "At most 62 days after from" }
+                ignoreWorkingHours: { type: boolean }
+                dayPart: { type: string, enum: [morning, afternoon, evening] }
+                limit: { type: integer, minimum: 1, maximum: 50, default: 5 }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FreeTime" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /v1/quick-add:
+    post:
+      tags: [assist]
+      operationId: quickAdd
+      summary: Turn a sentence into an event draft
+      description: |
+        Nothing is written. The draft's `event` can be POSTed to `/v1/events` once every non-optional ambiguity is
+        answered (apply an answer by setting the field named in `field`: `when.date` and `when.time` replace the date
+        or time of `event.when.start`, `attendees` adds the chosen email, `calendarId` and `title` set those fields).
+        `spans` mark recognised words (UTF-16 offsets into `text`) for underlining. This is the rule parser
+        (`source: rules`); when alfather is connected (`CALENDAR_ALFATHER_URL`, M8) answers carry `source: alfather` and
+        the same shape. If alfather is configured but does not answer within 3 s (or answers with something that is
+        not a valid draft) the hub returns the rule parser's draft with `source: rules` and `degraded: true`; the app
+        then shows the "alfather isn't answering" state next to the rule-based guess.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, maxLength: 500 }
+                now: { type: string, format: date-time, description: "default: the hub's clock" }
+                tzid: { type: string, description: "default: the user zone" }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Draft" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /mcp:
+    post:
+      tags: [mcp]
+      operationId: mcp
+      summary: The hub's MCP server (streamable HTTP, stateless, JSON responses)
+      description: |
+        Model Context Protocol endpoint for agents; speak MCP JSON-RPC 2.0 (`initialize`, `tools/list`, `tools/call`).
+        Same bearer auth as the rest of the API. `GET` and `DELETE` answer 405 (no sessions, no server push).
+
+        **Tools.** Read scope: `agenda(from,to,calendars?)`, `get_event(id)`, `search(q,from?,to?,limit?)`,
+        `freetime(duration,from,to,day_part?,ignore_working_hours?,limit?)`, `calendars()`, and the proposal tools
+        `draft_event(input)`, `draft_update_event(id,patch,scope?)`, `draft_delete_event(id,scope?)`,
+        `draft_rsvp(id,response,note?,scope?)`. Write scope adds `create_event`, `update_event`, `delete_event`,
+        `rsvp_event`, each taking only `{confirm_token}`.
+
+        **Human approval.** A draft_* tool writes nothing; it returns `confirm_token` (single use, valid 10 minutes,
+        bound to the token that drafted it and to the exact payload drafted). A write tool refuses with
+        `confirmation_required`, `confirmation_invalid`, `confirmation_pending` (not yet approved),
+        `confirmation_expired` or `confirmation_used` unless the token was approved by a person through
+        `POST /v1/mcp/confirmations/{token}/approve` (device token, write scope). A token of kind `script` can never
+        approve, so a script token at read scope can only read and draft; at write scope it can run what a person approved.
+        Update/delete/rsvp drafts remember the event `version`; if the event changed meanwhile the write tool fails
+        with `precondition_failed` and the agent drafts again.
+
+        **Untrusted text.** Event titles, locations, descriptions and names come from other people. They are returned
+        only as string values of data fields (control and formatting characters removed, length capped), next to a
+        `notice` field saying so. Tool errors are results with `isError: true` and `{error:{code,message}}`.
+        Every call is audit-logged (counts in `GET /v1/status` under `mcp`; event text is never logged).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, description: "a JSON-RPC 2.0 request or batch" }
+      responses:
+        "200":
+          description: JSON-RPC response
+          content:
+            application/json:
+              schema: { type: object }
+        "202": { description: notification accepted }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /v1/mcp/confirmations/{token}:
+    parameters:
+      - { name: token, in: path, required: true, schema: { type: string, pattern: "^cfm_" } }
+    get:
+      tags: [mcp]
+      operationId: getMcpConfirmation
+      summary: Look at an agent draft before approving it
+      description: Device token with write scope. `summary` is what the agent proposes (shown in the approval sheet).
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpConfirmation" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /v1/mcp/confirmations/{token}/approve:
+    parameters:
+      - { name: token, in: path, required: true, schema: { type: string, pattern: "^cfm_" } }
+    post:
+      tags: [mcp]
+      operationId: approveMcpConfirmation
+      summary: Approve an agent draft (human step)
+      description: |
+        Marks the draft approved so the agent's matching write tool can run once, within the 10 minutes. Needs a
+        **device** token with write scope (script tokens and the drafting token itself get 403). Approving twice is a
+        no-op. Unknown or expired token: 404. Already used: 409.
+      responses:
+        "200":
+          description: approved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpConfirmation" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /v1/people:
+    get:
+      tags: [assist]
+      operationId: searchPeople
+      summary: People seen on earlier events
+      description: Name (any word) or email prefix, most recently seen first, at most 6. Yourself and room resources are excluded.
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [email, name, events]
+                      properties:
+                        email: { type: string }
+                        name: { type: string }
+                        events: { type: integer }
+                        lastSeen: { type: [string, "null"], format: date-time }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /v1/automations:
+    get:
+      tags: [automations]
+      operationId: listAutomations
+      description: Admin scope. Secrets are never returned (`secretSet`/`tokenSet` say whether one is stored).
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Automation" } }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [automations]
+      operationId: createAutomation
+      description: |
+        Admin scope. Triggers: `event.start` (`offsetMin` -1440..60 relative to the start, optional `calendarId`; fires once per
+        occurrence, up to 10 minutes late after a restart; declined, cancelled, hidden and all-day events are skipped),
+        `event.created` (optional `calendarId`; edits are not creations) and `cron` (`expr` is `minute hour day-of-month month
+        day-of-week` in the user's zone; a missed time is not replayed after more than an hour). Actions: `webhook` (JSON
+        POST, signed when a `secret` is set: `X-Calendar-Signature: sha256=hex(hmac(secret, timestamp + "." + body))` with
+        `X-Calendar-Timestamp`) or `ntfy` (`topic`, optional `server` default https://ntfy.sh, optional bearer `token`). Cron
+        automations send the day's summary (same shape as `GET /v1/summary`). Failed deliveries are retried twice (2 s, 10 s)
+        unless the target answers 4xx.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AutomationInput" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Automation" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /v1/automations/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      tags: [automations]
+      operationId: getAutomation
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Automation" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [automations]
+      operationId: patchAutomation
+      description: Omitted fields are unchanged. A stored `secret`/`token` is kept unless a new one is sent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AutomationInput" }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Automation" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [automations]
+      operationId: deleteAutomation
+      responses:
+        "204": { description: deleted }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/automations/{id}/test:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post:
+      tags: [automations]
+      operationId: testAutomation
+      summary: Send one sample delivery now
+      responses:
+        "200":
+          description: the delivery result (ok false with a reason when the target failed)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AutomationRun" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /v1/automations/{id}/runs:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    get:
+      tags: [automations]
+      operationId: automationRuns
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        "200":
+          description: newest first (the last 100 are kept)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/AutomationRun" } }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /v1/tokens:
+    get:
+      tags: [tokens]
+      operationId: listTokens
+      description: Admin scope. Includes revoked tokens (`revokedAt` set); `lastUsedAt` is updated at most once a minute.
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Token" } }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [tokens]
+      operationId: createToken
+      description: Admin scope. The secret (`cal_...`) is returned once and never again. Script tokens are meant to be `read` unless a script must write.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, kind, scope]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                kind: { type: string, enum: [device, script] }
+                scope: { $ref: "#/components/schemas/TokenScope" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Token" }
+                  - type: object
+                    required: [secret]
+                    properties: { secret: { type: string, pattern: "^cal_" } }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /v1/tokens/{id}:
+    delete:
+      tags: [tokens]
+      operationId: revokeToken
+      description: Admin scope. Revoking the token you are calling with is a 400. A revoked device token also loses its push registration.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "204": { description: revoked }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: "Token with prefix cal_. Scopes: read (GET), write (+mutations), admin (+tokens, accounts)."
+
+  parameters:
+    EventId: { name: id, in: path, required: true, schema: { type: string } }
+    AccountId: { name: id, in: path, required: true, schema: { type: string } }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      schema: { type: string }
+      description: |
+        Send a fresh UUID per user action on POST/PATCH/DELETE. The first 2xx response is stored for 24 h per
+        token and key and replayed (header `Idempotent-Replayed: true`) for an identical retry. The same key with a
+        different method/path/query/If-Match/body is 422 `validation` (field `Idempotency-Key`). Errors are not stored.
+    IfMatch:
+      name: If-Match
+      in: header
+      schema: { type: string }
+      description: 'The event `version` you last saw, quoted, e.g. "4812". Stale = 412 `precondition_failed`. Omit to skip the check.'
+    Scope:
+      name: scope
+      in: query
+      schema: { $ref: "#/components/schemas/Scope" }
+
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Scope:
+      type: string
+      enum: [this, following, all]
+      description: Recurring-event edit scope; default `this`.
+    TokenScope:
+      type: string
+      enum: [read, write, admin]
+    ErrorCode:
+      type: string
+      enum: [unauthorized, forbidden, not_found, validation, conflict, precondition_failed, provider_error, needs_reauth, rate_limited, unavailable, unhealthy, internal]
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { $ref: "#/components/schemas/ErrorCode" }
+            message: { type: string }
+            field: { type: string }
+            current: { description: "Latest Event, present on 409 conflict and 412 precondition_failed (never on 404)", type: [object, "null"] }
+
+    Hello:
+      type: object
+      required: [server, version, apiVersion, scope, tokenId]
+      properties:
+        server: { type: string }
+        version: { type: string }
+        apiVersion: { type: integer }
+        scope: { $ref: "#/components/schemas/TokenScope" }
+        tokenId: { type: string }
+
+    Status:
+      type: object
+      required: [hubVersion, rev, dbSizeBytes, sseClients, accounts, warnings]
+      properties:
+        hubVersion: { type: string }
+        rev: { type: integer }
+        dbSizeBytes: { type: integer, minimum: 0 }
+        sseClients: { type: integer, minimum: 0 }
+        accounts:
+          type: array
+          items:
+            type: object
+            required: [accountId, email, status, failCount]
+            properties:
+              accountId: { type: string }
+              email: { type: string }
+              status: { $ref: "#/components/schemas/AccountStatus" }
+              lastSyncAt: { type: [string, "null"], format: date-time }
+              lastOkAt: { type: [string, "null"], format: date-time }
+              nextSyncAt: { type: [string, "null"], format: date-time }
+              lastError: { type: [string, "null"] }
+              failCount: { type: integer, minimum: 0 }
+        mcp:
+          type: object
+          description: Agent (MCP) activity over the last 24 hours, from the audit log.
+          required: [calls24h, refused24h, pendingConfirmations, lastCallAt, executed24h]
+          properties:
+            calls24h: { type: integer, minimum: 0 }
+            refused24h: { type: integer, minimum: 0, description: "tool calls that returned an error result (bad input, missing/expired/used confirm_token, ...)" }
+            executed24h: { type: integer, minimum: 0, description: "approved write tools that ran successfully" }
+            pendingConfirmations: { type: integer, minimum: 0, description: "drafts still waiting for approval" }
+            lastCallAt: { type: [string, "null"], format: date-time }
+        warnings:
+          type: array
+          items:
+            type: object
+            required: [kind, message]
+            properties:
+              kind: { type: string, description: "backup (last backup older than 36 h or never made, only when scheduled backups are configured); later: secret_expiry" }
+              message: { type: string }
+
+    SyncRun:
+      type: object
+      required: [id, accountId, startedAt, durationMs, trigger, added, changed, removed]
+      properties:
+        id: { type: integer }
+        accountId: { type: string }
+        calendarId: { type: [string, "null"], description: "null = whole-account pass" }
+        startedAt: { type: string, format: date-time }
+        durationMs: { type: integer }
+        trigger: { type: string, description: "tick|manual|after_write|reauthed" }
+        added: { type: integer }
+        changed: { type: integer }
+        removed: { type: integer }
+        errorKind: { type: [string, "null"] }
+        error: { type: [string, "null"] }
+
+    AccountStatus:
+      type: string
+      enum: [active, syncing, needs_reauth, error, paused]
+
+    Account:
+      type: object
+      required: [id, provider, email, displayName, color, status, createdAt]
+      properties:
+        id: { type: string }
+        provider: { type: string, enum: [google, microsoft, icloud, ics] }
+        email: { type: string }
+        displayName: { type: string }
+        color: { type: string, description: "Palette key, e.g. cobalt, rose, ochre" }
+        status: { $ref: "#/components/schemas/AccountStatus" }
+        statusDetail: { type: string }
+        lastSyncAt: { type: [string, "null"], format: date-time }
+        lastOkAt: { type: [string, "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    Calendar:
+      type: object
+      required: [id, accountId, name, color, tzid, access, isPrimary, visible]
+      properties:
+        id: { type: string }
+        accountId: { type: string }
+        name: { type: string }
+        color: { type: string, description: "Effective palette key (override else account color)" }
+        colorOverride: { type: [string, "null"] }
+        tzid: { type: string }
+        access: { type: string, enum: [owner, writer, reader, freebusy] }
+        isPrimary: { type: boolean }
+        visible: { type: boolean }
+
+    Settings:
+      type: object
+      required: [defaultCalendarId, weekStart, workingHours]
+      properties:
+        defaultCalendarId: { type: [string, "null"] }
+        weekStart: { type: integer, minimum: 0, maximum: 6, description: "0 = Sunday" }
+        secondaryTzid: { type: [string, "null"] }
+        userTzid: { type: string, description: "IANA zone all-day events are windowed in. PUT: omitted = unchanged. Changing it re-times all-day ordering on the hub." }
+        alertDefaults:
+          type: object
+          description: |
+            Default reminder lead time in minutes (0..40320); null = none. PUT: omitted = unchanged.
+            Timed events: that many minutes before the start. All-day events have no clock time, so `allDay`
+            counts whole days back from midnight of the first day and the reminder fires at `allDayTime`:
+            1440 = the previous day at 09:00, 2880 = two days before, 0 = the day itself at 09:00; a lead that is not a
+            multiple of 1440 is subtracted from midnight as it is. The same rule applies to a per-event reminder override.
+            The hub also pushes `{k:"reminder", eventId, occurrenceId}` for all-day events when the time comes (once).
+          properties:
+            timed: { type: [integer, "null"], minimum: 0, maximum: 40320 }
+            allDay: { type: [integer, "null"], minimum: 0, maximum: 40320 }
+            allDayTime: { type: string, pattern: '^\d{2}:\d{2}$', description: "HH:MM in userTzid, default 09:00; PUT: omitted = unchanged" }
+        lunchBreak:
+          type: object
+          description: "Free-time search never offers a slot inside this daily window (off by default; ignoreWorkingHours lifts it too). PUT: omitted = unchanged."
+          required: [enabled, start, end]
+          properties:
+            enabled: { type: boolean }
+            start: { type: string, pattern: '^\d{2}:\d{2}$', description: "HH:MM in userTzid, default 12:00" }
+            end: { type: string, pattern: '^\d{2}:\d{2}$', description: "default 13:00, must be after start" }
+        morningSummary:
+          type: object
+          description: "Daily summary push (off by default). PUT: omitted = unchanged. The push carries only the date; fetch GET /v1/summary."
+          required: [enabled, time]
+          properties:
+            enabled: { type: boolean }
+            time: { type: string, pattern: '^\d{2}:\d{2}$', description: "HH:MM in userTzid; default 07:30" }
+        workingHours:
+          type: object
+          required: [start, end, days]
+          properties:
+            start: { type: string, pattern: '^\d{2}:\d{2}$' }
+            end: { type: string, pattern: '^\d{2}:\d{2}$' }
+            days: { type: array, items: { type: integer, minimum: 0, maximum: 6 } }
+
+    FreeBusy:
+      type: object
+      required: [from, to, busy]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        busy:
+          type: array
+          items:
+            type: object
+            required: [start, end]
+            properties:
+              start: { type: string, format: date-time }
+              end: { type: string, format: date-time }
+
+    Join:
+      type: object
+      required: [url, kind]
+      properties:
+        url: { type: string }
+        kind: { type: string, enum: [meet, zoom, teams, other] }
+
+    MyResponse:
+      type: string
+      enum: [needsAction, accepted, declined, tentative]
+
+    AgendaItem:
+      type: object
+      required: [id, eventId, version, calendarId, accountId, color, title, allDay, status, busy, recurring, canEdit, canRSVP, canAddConference]
+      properties:
+        id: { type: string, description: "eventId:rkey, stable per occurrence" }
+        eventId: { type: string }
+        version: { type: integer, description: "Use as If-Match" }
+        calendarId: { type: string }
+        accountId: { type: string }
+        color: { type: string }
+        title: { type: string }
+        allDay: { type: boolean }
+        start: { type: string, format: date-time, description: "Timed events; UTC" }
+        end: { type: string, format: date-time }
+        tzid: { type: string }
+        date: { type: string, format: date, description: "All-day start, inclusive" }
+        endDate: { type: string, format: date, description: "All-day end, EXCLUSIVE" }
+        location: { type: string }
+        join: { oneOf: [{ $ref: "#/components/schemas/Join" }, { type: "null" }] }
+        myResponse: { oneOf: [{ $ref: "#/components/schemas/MyResponse" }, { type: "null" }] }
+        status: { type: string, enum: [confirmed, tentative, cancelled] }
+        busy: { type: boolean }
+        recurring: { type: boolean }
+        canEdit: { type: boolean }
+        canRSVP: { type: boolean }
+        canAddConference: { type: boolean }
+        organizer:
+          description: "Who sent the invitation (\"from Ana\"); absent when unknown. isSelf = you organise it."
+          oneOf:
+            - type: object
+              required: [email]
+              properties: { email: { type: string }, name: { type: string }, isSelf: { type: boolean } }
+            - type: "null"
+      if:
+        properties: { allDay: { const: true } }
+        required: [allDay]
+      then:
+        required: [date, endDate]
+      else:
+        required: [start, end, tzid]
+
+    AgendaResponse:
+      type: object
+      required: [rev, from, to, items]
+      properties:
+        rev: { type: integer }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        items: { type: array, items: { $ref: "#/components/schemas/AgendaItem" } }
+
+    Attendee:
+      type: object
+      required: [email, response]
+      properties:
+        email: { type: string }
+        name: { type: string }
+        response: { $ref: "#/components/schemas/MyResponse" }
+        optional: { type: boolean }
+        isSelf: { type: boolean }
+        isOrganizer: { type: boolean }
+
+    Recurrence:
+      type: object
+      required: [rrule]
+      properties:
+        rrule: { type: string, description: "RFC 5545 RRULE without the prefix" }
+        summary: { type: string, description: 'Human text, e.g. "Weekly on Tue, Thu" (responses only)' }
+
+    Event:
+      allOf:
+        - $ref: "#/components/schemas/AgendaItem"
+        - type: object
+          properties:
+            description: { type: string }
+            attendees: { type: array, items: { $ref: "#/components/schemas/Attendee" } }
+            recurrence: { oneOf: [{ $ref: "#/components/schemas/Recurrence" }, { type: "null" }] }
+            reminderMin: { type: [integer, "null"] }
+            updatedAt: { type: string, format: date-time }
+            calendarName: { type: string }
+            accountName: { type: string }
+
+    EventPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Event" } }
+        nextCursor: { type: [string, "null"] }
+
+    When:
+      type: object
+      required: [allDay]
+      properties:
+        allDay: { type: boolean }
+        start: { type: string, description: "Local wall time without zone, e.g. 2026-10-16T13:00:00 (interpreted in tzid)" }
+        tzid: { type: string }
+        durationMin: { type: integer, minimum: 1 }
+        date: { type: string, format: date }
+        endDate: { type: string, format: date, description: EXCLUSIVE }
+
+    EventInput:
+      type: object
+      required: [calendarId, title, when]
+      properties:
+        calendarId: { type: string }
+        title: { type: string }
+        when: { $ref: "#/components/schemas/When" }
+        location: { type: string }
+        description: { type: string }
+        attendees: { type: array, items: { type: string, format: email } }
+        recurrence: { oneOf: [{ $ref: "#/components/schemas/Recurrence" }, { type: "null" }] }
+        conference: { type: string, enum: [meet, none] }
+        reminderMin: { type: [integer, "null"] }
+
+    Patch:
+      type: object
+      description: Omitted = untouched, null = clear. Same fields as EventInput, all optional.
+      properties:
+        title: { type: string }
+        when: { $ref: "#/components/schemas/When" }
+        location: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+        attendees: { type: [array, "null"], items: { type: string, format: email } }
+        recurrence: { oneOf: [{ $ref: "#/components/schemas/Recurrence" }, { type: "null" }] }
+        conference: { type: [string, "null"], enum: [meet, none, null] }
+        reminderMin: { type: [integer, "null"] }
+
+    Slot:
+      type: object
+      required: [start, end, reason, best]
+      properties:
+        start: { type: string, format: date-time }
+        end: { type: string, format: date-time }
+        reason: { type: string, description: 'e.g. "After Standup", "Between two meetings"' }
+        best: { type: boolean }
+
+    FreeTime:
+      type: object
+      required: [durationMin, from, to, slots, closest]
+      properties:
+        durationMin: { type: integer }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        workingHours: { type: [object, "null"], description: "null when working hours were ignored" }
+        slots: { type: array, items: { $ref: "#/components/schemas/Slot" } }
+        closest:
+          type: array
+          items:
+            type: object
+            required: [start, end, durationMin, kind, reason]
+            properties:
+              start: { type: string, format: date-time }
+              end: { type: string, format: date-time }
+              durationMin: { type: integer }
+              kind: { type: string, enum: [later, shorter] }
+              reason: { type: string }
+
+    McpConfirmation:
+      type: object
+      required: [id, kind, summary, status, createdAt, expiresAt]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [create, update, delete, rsvp] }
+        summary: { type: object, description: "what the agent proposes; free-form data, untrusted text inside" }
+        status: { type: string, enum: [pending, approved, used, expired] }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        approvedAt: { type: string, format: date-time }
+
+    Draft:
+      type: object
+      required: [confidence, source, event, people, ambiguities, spans]
+      properties:
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        source: { type: string, enum: [rules, alfather] }
+        degraded: { type: boolean, description: "true = alfather is configured but unreachable or invalid; this draft is from the rule parser. Absent otherwise." }
+        event: { $ref: "#/components/schemas/EventInput" }
+        calendarName: { type: string }
+        people:
+          type: array
+          items:
+            type: object
+            required: [name]
+            properties: { name: { type: string }, email: { type: string, description: "empty when not resolved to a known person" } }
+        ambiguities:
+          type: array
+          items:
+            type: object
+            required: [field, question, options, default, optional]
+            properties:
+              field: { type: string, enum: [title, when.date, when.time, attendees, calendarId] }
+              question: { type: string }
+              options:
+                type: array
+                description: "Empty = free-form answer (date/time picker, text)"
+                items:
+                  type: object
+                  required: [value, label]
+                  properties: { value: { type: string }, label: { type: string } }
+              default: { type: integer, description: "Index of the suggested option, -1 = none" }
+              optional: { type: boolean, description: "The draft is usable without an answer" }
+        spans:
+          type: array
+          items:
+            type: object
+            required: [kind, from, to]
+            properties:
+              kind: { type: string, enum: [who, when, where] }
+              from: { type: integer }
+              to: { type: integer }
+
+    AutomationInput:
+      type: object
+      description: Create requires name, trigger and action.
+      properties:
+        name: { type: string, maxLength: 100 }
+        enabled: { type: boolean, default: true }
+        trigger:
+          type: object
+          required: [type]
+          properties:
+            type: { type: string, enum: [event.start, event.created, cron] }
+            offsetMin: { type: integer, minimum: -1440, maximum: 60 }
+            calendarId: { type: string }
+            expr: { type: string, example: "0 7 * * *" }
+        action:
+          type: object
+          required: [type]
+          properties:
+            type: { type: string, enum: [webhook, ntfy] }
+            url: { type: string, description: "webhook" }
+            secret: { type: string, description: "webhook signing key, write-only" }
+            server: { type: string, description: "ntfy base URL" }
+            topic: { type: string, description: "ntfy" }
+            token: { type: string, description: "ntfy bearer token, write-only" }
+
+    AutomationRun:
+      type: object
+      required: [id, automationId, at, trigger, ok, ms]
+      properties:
+        id: { type: integer }
+        automationId: { type: string }
+        at: { type: string, format: date-time }
+        trigger: { type: string }
+        ok: { type: boolean }
+        status: { type: [integer, "null"], description: "HTTP status of the last attempt" }
+        detail: { type: string }
+        ms: { type: integer }
+
+    Automation:
+      type: object
+      required: [id, name, enabled, trigger, action]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        enabled: { type: boolean }
+        trigger:
+          type: object
+          required: [type]
+          properties:
+            type: { type: string }
+            offsetMin: { type: integer }
+            calendarId: { type: string }
+            expr: { type: string }
+        action:
+          type: object
+          required: [type, secretSet, tokenSet]
+          properties:
+            type: { type: string }
+            url: { type: string }
+            server: { type: string }
+            topic: { type: string }
+            secretSet: { type: boolean }
+            tokenSet: { type: boolean }
+        lastRun: { oneOf: [{ $ref: "#/components/schemas/AutomationRun" }, { type: "null" }] }
+
+    Token:
+      type: object
+      required: [id, name, kind, scope, prefix, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [device, script] }
+        scope: { $ref: "#/components/schemas/TokenScope" }
+        prefix: { type: string }
+        createdAt: { type: string, format: date-time }
+        lastUsedAt: { type: [string, "null"], format: date-time }
+        revokedAt: { type: [string, "null"], format: date-time }
+
+    SseEvents:
+      description: JSON `data:` payload per SSE event name.
+      oneOf:
+        - title: rev
+          type: object
+          required: [rev]
+          properties: { rev: { type: integer } }
+        - title: account
+          type: object
+          required: [id, status]
+          properties: { id: { type: string }, status: { $ref: "#/components/schemas/AccountStatus" } }
+        - title: sync
+          type: object
+          required: [accountId, state]
+          properties: { accountId: { type: string }, state: { type: string, enum: [started, finished, failed] } }
+        - title: ping
+          type: object
+          additionalProperties: false

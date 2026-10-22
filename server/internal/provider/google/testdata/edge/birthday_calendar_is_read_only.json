@@ -1,0 +1,32 @@
+{
+ "calendar": {
+  "access": "reader"
+ },
+ "event": {
+  "id": "b",
+  "eventType": "birthday",
+  "summary": "Sam's birthday",
+  "start": {
+   "date": "2026-10-14"
+  },
+  "end": {
+   "date": "2026-10-15"
+  },
+  "transparency": "transparent",
+  "recurrence": [
+   "RRULE:FREQ=YEARLY"
+  ],
+  "birthdayProperties": {
+   "type": "birthday"
+  }
+ },
+ "want": {
+  "title": "Sam's birthday",
+  "kind": "master",
+  "busy": false,
+  "canEdit": false,
+  "canRSVP": false,
+  "canAddConference": false,
+  "allDay": true
+ }
+}

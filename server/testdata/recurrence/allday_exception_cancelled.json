@@ -1,0 +1,30 @@
+{
+  "name": "allday_exception_cancelled",
+  "note": "",
+  "window": [
+    "2026-10-01T00:00:00Z",
+    "2026-12-01T00:00:00Z"
+  ],
+  "master": {
+    "allDay": true,
+    "startDate": "2026-10-12",
+    "endDate": "2026-10-13",
+    "rrule": "FREQ=DAILY;COUNT=3"
+  },
+  "exceptions": [
+    {
+      "orig": "2026-10-13",
+      "cancelled": true
+    }
+  ],
+  "expected": [
+    {
+      "startDate": "2026-10-12",
+      "endDate": "2026-10-13"
+    },
+    {
+      "startDate": "2026-10-14",
+      "endDate": "2026-10-15"
+    }
+  ]
+}

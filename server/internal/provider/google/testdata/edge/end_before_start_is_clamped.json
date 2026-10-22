@@ -1,0 +1,19 @@
+{
+ "calendar": {
+  "access": "owner"
+ },
+ "event": {
+  "id": "a",
+  "summary": "Bad data",
+  "start": {
+   "dateTime": "2026-10-14T10:00:00Z"
+  },
+  "end": {
+   "dateTime": "2026-10-14T09:00:00Z"
+  }
+ },
+ "want": {
+  "start": "2026-10-14T10:00:00Z",
+  "end": "2026-10-14T10:00:00Z"
+ }
+}

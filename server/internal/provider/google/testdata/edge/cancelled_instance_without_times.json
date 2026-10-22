@@ -1,0 +1,19 @@
+{
+ "calendar": {
+  "access": "owner"
+ },
+ "event": {
+  "id": "m_20261014T090000Z",
+  "status": "cancelled",
+  "recurringEventId": "m",
+  "originalStartTime": {
+   "dateTime": "2026-10-14T10:00:00+01:00"
+  }
+ },
+ "want": {
+  "status": "cancelled",
+  "kind": "exception",
+  "remoteSeriesId": "m",
+  "recurrenceKey": 1791968400
+ }
+}

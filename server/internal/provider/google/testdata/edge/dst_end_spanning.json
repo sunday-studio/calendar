@@ -1,0 +1,22 @@
+{
+ "calendar": {
+  "access": "owner"
+ },
+ "event": {
+  "id": "a",
+  "summary": "Clocks back",
+  "start": {
+   "dateTime": "2026-10-25T00:30:00+01:00",
+   "timeZone": "Europe/London"
+  },
+  "end": {
+   "dateTime": "2026-10-25T02:30:00+00:00",
+   "timeZone": "Europe/London"
+  }
+ },
+ "want": {
+  "start": "2026-10-24T23:30:00Z",
+  "end": "2026-10-25T02:30:00Z",
+  "tzid": "Europe/London"
+ }
+}

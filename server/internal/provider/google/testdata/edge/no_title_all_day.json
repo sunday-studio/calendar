@@ -1,0 +1,21 @@
+{
+ "calendar": {
+  "access": "owner"
+ },
+ "event": {
+  "id": "a",
+  "start": {
+   "date": "2026-10-14"
+  },
+  "end": {
+   "date": "2026-10-15"
+  }
+ },
+ "want": {
+  "title": "",
+  "allDay": true,
+  "startDate": "2026-10-14",
+  "endDate": "2026-10-15",
+  "canEdit": true
+ }
+}

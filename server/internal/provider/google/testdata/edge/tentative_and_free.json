@@ -1,0 +1,22 @@
+{
+ "calendar": {
+  "access": "owner"
+ },
+ "event": {
+  "id": "t",
+  "status": "tentative",
+  "summary": "Maybe",
+  "transparency": "transparent",
+  "start": {
+   "dateTime": "2026-10-14T07:00:00Z"
+  },
+  "end": {
+   "dateTime": "2026-10-14T10:00:00Z"
+  }
+ },
+ "want": {
+  "status": "tentative",
+  "busy": false,
+  "canEdit": true
+ }
+}

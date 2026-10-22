@@ -1,0 +1,21 @@
+{
+ "calendar": {
+  "access": "owner"
+ },
+ "event": {
+  "id": "o",
+  "eventType": "outOfOffice",
+  "start": {
+   "date": "2026-10-14"
+  },
+  "end": {
+   "date": "2026-10-17"
+  }
+ },
+ "want": {
+  "title": "Out of office",
+  "busy": true,
+  "allDay": true,
+  "endDate": "2026-10-17"
+ }
+}

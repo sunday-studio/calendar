@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Ad hoc Release build (method release-testing, formerly ad-hoc): a signed .ipa you install on devices whose
+     UDIDs are registered in your paid team. No TestFlight, no upload. scripts/ios-archive.sh --adhoc fills in
+     teamID in a temp copy. Output: ios/build/export-adhoc/Calendar.ipa -->
+<plist version="1.0">
+<dict>
+	<key>method</key>
+	<string>release-testing</string>
+	<key>destination</key>
+	<string>export</string>
+	<key>teamID</key>
+	<string>REPLACE_WITH_PAID_TEAM_ID</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<key>compileBitcode</key>
+	<false/>
+	<key>thinning</key>
+	<string>&lt;none&gt;</string>
+</dict>
+</plist>

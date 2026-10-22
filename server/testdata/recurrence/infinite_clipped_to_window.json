@@ -1,0 +1,30 @@
+{
+  "name": "infinite_clipped_to_window",
+  "note": "",
+  "window": [
+    "2026-10-10T00:00:00Z",
+    "2026-10-13T00:00:00Z"
+  ],
+  "master": {
+    "allDay": false,
+    "start": "2026-10-01T09:00:00",
+    "tzid": "UTC",
+    "durationMin": 60,
+    "rrule": "FREQ=DAILY"
+  },
+  "exceptions": [],
+  "expected": [
+    {
+      "start": "2026-10-10T09:00:00Z",
+      "end": "2026-10-10T10:00:00Z"
+    },
+    {
+      "start": "2026-10-11T09:00:00Z",
+      "end": "2026-10-11T10:00:00Z"
+    },
+    {
+      "start": "2026-10-12T09:00:00Z",
+      "end": "2026-10-12T10:00:00Z"
+    }
+  ]
+}
