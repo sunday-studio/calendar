@@ -153,7 +153,7 @@ public final class SearchViewModel {
     func result(_ i: AgendaItem, now: Date) -> Result {
         let start: Date
         var timeWords: String
-        let time = DraftFormat.formatter("jmm", tz, .current)
+        let time = DraftFormat.formatter("jmm", tz, DraftFormat.displayLocale)
         if i.allDay {
             start = i.date.map { DayKey($0).startOfDay(in: tz) } ?? now
             timeWords = "All day"

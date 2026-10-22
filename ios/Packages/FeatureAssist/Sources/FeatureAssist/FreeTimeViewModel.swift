@@ -215,7 +215,7 @@ public final class FreeTimeViewModel {
 
     /// "Tue 13 \u{00B7} 14:00 to 16:00"-style text for slot rows.
     public func slotTitle(_ s: FreeSlot) -> String {
-        let day = DraftFormat.formatter("EEEd", tz, .current), time = DraftFormat.formatter("jmm", tz, .current)
+        let day = DraftFormat.formatter("EEEd", tz, DraftFormat.displayLocale), time = DraftFormat.formatter("jmm", tz, DraftFormat.displayLocale)
         return "\(day.string(from: s.start)), \(time.string(from: s.start)) to \(time.string(from: s.end))"
     }
 }

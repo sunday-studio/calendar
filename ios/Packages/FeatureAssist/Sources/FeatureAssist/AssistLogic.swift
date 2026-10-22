@@ -15,7 +15,7 @@ public enum NextMeeting {
     }
 
     /// One sentence for Siri to speak or show: "Next up is Design review at 14:00, in 25 minutes, at Room 3."
-    public static func sentence(next: AgendaItem?, now: Date, tz: TimeZone, locale: Locale = .current) -> String {
+    public static func sentence(next: AgendaItem?, now: Date, tz: TimeZone, locale: Locale = DraftFormat.displayLocale) -> String {
         guard let i = next, let s = i.start else { return "Nothing else on your calendar today." }
         let time = DraftFormat.formatter("jmm", tz, locale)
         let place = (i.location ?? "").isEmpty ? "" : ", at \(i.location!)"

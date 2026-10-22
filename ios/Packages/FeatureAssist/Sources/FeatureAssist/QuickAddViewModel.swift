@@ -5,15 +5,26 @@ import Observation
 
 /// Pure text helpers for drafts (no SwiftUI).
 public enum DraftFormat {
+    /// The locale every Assist surface formats with: the device locale with the clock forced to the
+    /// "24 hour time" preference (default on), so output never depends on the device's region setting.
+    public static var displayLocale: Locale { DisplayPrefs.load().locale() }
+
     public static func formatter(_ template: String, _ tz: TimeZone, _ locale: Locale) -> DateFormatter {
         let f = DateFormatter()
         f.locale = locale; f.timeZone = tz
-        f.setLocalizedDateFormatFromTemplate(template)
+        if template.contains("j") {
+            // `j` follows the region, not the locale's hourCycle override, so spell the clock out.
+            let hc = locale.hourCycle
+            let is24 = hc == nil || hc == .zeroToTwentyThree || hc == .oneToTwentyFour
+            f.dateFormat = is24 ? "HH:mm" : "h:mm a"
+        } else {
+            f.setLocalizedDateFormatFromTemplate(template)
+        }
         return f
     }
 
     /// "Fri 16 Oct \u{00B7} 13:00 to 14:00", "Fri 16 Oct \u{00B7} All day", nil when the draft has no time yet.
-    public static func when(_ w: EventWhen, tz: TimeZone, locale: Locale = .current) -> String? {
+    public static func when(_ w: EventWhen, tz: TimeZone, locale: Locale = DraftFormat.displayLocale) -> String? {
         let day = formatter("EEEdMMM", tz, locale), time = formatter("jmm", tz, locale)
         if w.allDay {
             guard let d = w.date, let k = Optional(DayKey(d)) else { return nil }
@@ -27,7 +38,7 @@ public enum DraftFormat {
     }
 
     /// "Fri 13:00" for the Created toast.
-    public static func short(_ w: EventWhen, tz: TimeZone, locale: Locale = .current) -> String {
+    public static func short(_ w: EventWhen, tz: TimeZone, locale: Locale = DraftFormat.displayLocale) -> String {
         if w.allDay, let d = w.date {
             return formatter("EEEdMMM", tz, locale).string(from: DayKey(d).startOfDay(in: tz).addingTimeInterval(12 * 3600))
         }

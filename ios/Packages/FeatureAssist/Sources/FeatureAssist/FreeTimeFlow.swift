@@ -85,7 +85,7 @@ struct FreeTimeFlow: View {
                                 .buttonStyle(.plain)
                         }
                     }
-                    let day = DraftFormat.formatter("EEEd", model.tz, .current).string(from: chosen.start)
+                    let day = DraftFormat.formatter("EEEd", model.tz, DraftFormat.displayLocale).string(from: chosen.start)
                     Text("\(day) at a glance").calLabel().padding(.horizontal, Spacing.gutter).padding(.top, 28).padding(.bottom, 10)
                     DayGlance(blocks: blocks, proposed: hours(chosen)).padding(.horizontal, Spacing.gutter)
                         .task(id: chosen.id) { blocks = await busyBlocks(chosen.start) }
@@ -101,7 +101,7 @@ struct FreeTimeFlow: View {
     }
 
     private func highlight(_ s: FreeSlot, _ r: FreeTimeResult) -> some View {
-        let day = DraftFormat.formatter("EEEd", model.tz, .current), time = DraftFormat.formatter("jmm", model.tz, .current)
+        let day = DraftFormat.formatter("EEEd", model.tz, DraftFormat.displayLocale), time = DraftFormat.formatter("jmm", model.tz, DraftFormat.displayLocale)
         return NextEventBlock(time: nil, title: "\(day.string(from: s.start)) \u{00B7} \(time.string(from: s.start)) to \(time.string(from: s.end))",
                               footer: s.best ? "Best fit, \(s.reason.lowercased())" : s.reason, color: .cobalt,
                               action: .join("Book"), onAction: { model.startBooking(s) })
@@ -162,7 +162,7 @@ struct FreeTimeFlow: View {
             ScreenNav("Book the slot", leading: .back, onLeading: { model.backToAsk(); Task { await model.search() } })
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    let day = DraftFormat.formatter("EEEd", model.tz, .current), time = DraftFormat.formatter("jmm", model.tz, .current)
+                    let day = DraftFormat.formatter("EEEd", model.tz, DraftFormat.displayLocale), time = DraftFormat.formatter("jmm", model.tz, DraftFormat.displayLocale)
                     NextEventBlock(time: nil, title: "\(day.string(from: s.start)) \u{00B7} \(time.string(from: s.start)) to \(time.string(from: s.end))",
                                    footer: FreeTimeAsk.durationWords(Int(s.end.timeIntervalSince(s.start) / 60)), color: .cobalt)
                     LabeledField("Title", isFocused: focused) {
