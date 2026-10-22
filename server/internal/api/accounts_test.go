@@ -101,7 +101,6 @@ type env struct {
 	fake   *fakeGoogle
 	d      *db.DB
 	admin  string
-	now    time.Time
 	clock  *time.Time
 	logbuf *bytes.Buffer
 }

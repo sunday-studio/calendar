@@ -171,7 +171,6 @@ type parse struct {
 	endM     int
 	hasEnd   bool
 	durMin   int
-	allDay   bool
 	where    string
 	calHint  string
 	calName  string
@@ -231,8 +230,6 @@ func nearest(from time.Time, wd time.Weekday) time.Time {
 	d := (int(wd) - int(from.Weekday()) + 7) % 7
 	return from.AddDate(0, 0, d)
 }
-
-func dayLabel(t time.Time) string { return t.Format("Mon 2 Jan") }
 
 // Parse implements Parser.
 func (rp *RuleParser) Parse(ctx context.Context, req Request) (Draft, error) {

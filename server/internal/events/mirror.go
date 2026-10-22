@@ -129,10 +129,6 @@ func loadExceptions(ctx context.Context, q querier, masterID string) ([]domain.E
 	return out, rs.Err()
 }
 
-type calRow struct {
-	domain.Calendar
-}
-
 func loadCalendar(ctx context.Context, q querier, id string) (domain.Calendar, error) {
 	var c domain.Calendar
 	var tzid, rc, co sql.NullString

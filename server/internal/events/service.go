@@ -79,16 +79,6 @@ func remoteID(seed string) string {
 	return base32.HexEncoding.WithPadding(base32.NoPadding).EncodeToString(h[:16])[:26]
 }
 
-func lower(s string) string {
-	b := []byte(s)
-	for i, c := range b {
-		if c >= 'A' && c <= 'Z' {
-			b[i] = c + 32
-		}
-	}
-	return string(b)
-}
-
 // ---- session: lock + account + provider ----
 
 type sess struct {
@@ -98,7 +88,7 @@ type sess struct {
 }
 
 func (s *Service) begin(ctx context.Context, accountID string) (*sess, *Error) {
-	a, err := s.Accounts.Get(ctx, accountID)
+	_, err := s.Accounts.Get(ctx, accountID)
 	if err != nil {
 		if errors.Is(err, accounts.ErrNotFound) {
 			return nil, fail(KNotFound, "", "no such account")
@@ -108,7 +98,8 @@ func (s *Service) begin(ctx context.Context, accountID string) (*sess, *Error) {
 	l := s.Sync.Lock(accountID)
 	l.Lock()
 	// re-read under the lock: status may have changed while we waited
-	if a, err = s.Accounts.Get(ctx, accountID); err != nil {
+	a, err := s.Accounts.Get(ctx, accountID)
+	if err != nil {
 		l.Unlock()
 		return nil, s.internal("account", err)
 	}

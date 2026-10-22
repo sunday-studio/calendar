@@ -127,8 +127,6 @@ func redactQuery(raw string) string {
 	return Redact(u.String())
 }
 
-type ridKey struct{}
-
 // harden adds response headers, a request id and a write deadline.
 func (s *Server) harden(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
