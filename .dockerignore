@@ -1,0 +1,11 @@
+# the image is built from server/ (see server/Dockerfile); keep everything else out of any root-context build
+*
+!server/
+**/*.db
+**/*.db-*
+**/bin/
+**/.env
+**/calendard.env
+deploy/secrets/
+.git
+.DS_Store

@@ -1,0 +1,22 @@
+# Categories for GitHub's generated release notes (used when CHANGELOG.md has no section for the tag).
+changelog:
+  exclude:
+    labels: [skip-changelog]
+    authors: [dependabot]
+  categories:
+    - title: Breaking changes
+      labels: [breaking]
+    - title: Hub
+      labels: [hub, server]
+    - title: iOS app
+      labels: [ios]
+    - title: API
+      labels: [api]
+    - title: Deploy and operations
+      labels: [deploy, ops]
+    - title: Fixes
+      labels: [bug, fix]
+    - title: Dependencies and CI
+      labels: [dependencies, ci]
+    - title: Other changes
+      labels: ["*"]

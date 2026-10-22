@@ -1,0 +1,26 @@
+{
+ "calendar": {
+  "access": "owner"
+ },
+ "event": {
+  "id": "w",
+  "eventType": "workingLocation",
+  "start": {
+   "date": "2026-10-14"
+  },
+  "end": {
+   "date": "2026-10-15"
+  },
+  "transparency": "transparent",
+  "workingLocationProperties": {
+   "type": "homeOffice",
+   "homeOffice": {}
+  }
+ },
+ "want": {
+  "title": "Working from home",
+  "busy": false,
+  "allDay": true,
+  "canEdit": false
+ }
+}

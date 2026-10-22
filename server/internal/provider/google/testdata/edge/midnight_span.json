@@ -1,0 +1,23 @@
+{
+ "calendar": {
+  "access": "owner"
+ },
+ "event": {
+  "id": "a",
+  "summary": "Night shift",
+  "start": {
+   "dateTime": "2026-10-14T23:00:00+01:00",
+   "timeZone": "Europe/London"
+  },
+  "end": {
+   "dateTime": "2026-10-15T02:00:00+01:00",
+   "timeZone": "Europe/London"
+  }
+ },
+ "want": {
+  "title": "Night shift",
+  "start": "2026-10-14T22:00:00Z",
+  "end": "2026-10-15T01:00:00Z",
+  "tzid": "Europe/London"
+ }
+}

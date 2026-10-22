@@ -1,0 +1,34 @@
+{
+  "name": "dst_london_fall_2026",
+  "note": "clocks go back 2026-10-25 02:00; 09:00 wall stays",
+  "window": [
+    "2026-10-20T00:00:00Z",
+    "2026-11-05T00:00:00Z"
+  ],
+  "master": {
+    "allDay": false,
+    "start": "2026-10-24T09:00:00",
+    "tzid": "Europe/London",
+    "durationMin": 60,
+    "rrule": "FREQ=DAILY;COUNT=4"
+  },
+  "exceptions": [],
+  "expected": [
+    {
+      "start": "2026-10-24T08:00:00Z",
+      "end": "2026-10-24T09:00:00Z"
+    },
+    {
+      "start": "2026-10-25T09:00:00Z",
+      "end": "2026-10-25T10:00:00Z"
+    },
+    {
+      "start": "2026-10-26T09:00:00Z",
+      "end": "2026-10-26T10:00:00Z"
+    },
+    {
+      "start": "2026-10-27T09:00:00Z",
+      "end": "2026-10-27T10:00:00Z"
+    }
+  ]
+}

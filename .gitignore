@@ -1,0 +1,54 @@
+# Secrets and local config: never commit these
+deploy/secrets/*
+!deploy/secrets/.gitkeep
+deploy/calendard.env
+deploy/.env
+.env
+.env.*
+!*.env.example
+*.p8
+*.p12
+*.mobileprovision
+*.cer
+*.pem
+*.key
+master_key
+google_client.json
+
+# Local data and e2e state
+*.db
+*.db-shm
+*.db-wal
+*.db.pre-migrate-*
+*.pre-migrate-*
+.e2e/
+.e2e-*/
+.e2e-derived/
+
+# Build outputs
+server/bin/
+**/bin/
+dist/
+ios/build/
+ios/DerivedData/
+DerivedData/
+.build/
+*.xcarchive
+*.ipa
+*.dSYM.zip
+*.xcresult
+ios/project.personal.yml
+
+# Xcode user state
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Commercial GT America webfonts from an earlier design direction: not used by the app, licensed, never publish.
+/fonts/

@@ -1,0 +1,28 @@
+{
+  "name": "exdate_date_allday",
+  "note": "",
+  "window": [
+    "2026-10-01T00:00:00Z",
+    "2026-12-01T00:00:00Z"
+  ],
+  "master": {
+    "allDay": true,
+    "startDate": "2026-10-12",
+    "endDate": "2026-10-13",
+    "rrule": "FREQ=DAILY;COUNT=3",
+    "exdates": [
+      "EXDATE;VALUE=DATE:20261013"
+    ]
+  },
+  "exceptions": [],
+  "expected": [
+    {
+      "startDate": "2026-10-12",
+      "endDate": "2026-10-13"
+    },
+    {
+      "startDate": "2026-10-14",
+      "endDate": "2026-10-15"
+    }
+  ]
+}

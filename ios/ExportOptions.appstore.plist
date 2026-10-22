@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- TestFlight / App Store Connect. scripts/ios-archive.sh copies this to a temp file and fills in teamID;
+     edit teamID here only if you run xcodebuild -exportArchive by hand. destination=upload sends the build
+     to App Store Connect straight from the export step (no Transporter). The script flips it to "export"
+     with NO_UPLOAD=1. -->
+<plist version="1.0">
+<dict>
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>destination</key>
+	<string>upload</string>
+	<key>teamID</key>
+	<string>REPLACE_WITH_PAID_TEAM_ID</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<key>uploadSymbols</key>
+	<true/>
+	<key>manageAppVersionAndBuildNumber</key>
+	<false/>
+</dict>
+</plist>

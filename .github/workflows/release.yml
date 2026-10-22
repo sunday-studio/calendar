@@ -1,0 +1,247 @@
+name: release
+
+# main -> image tagged `edge` (+ sha-<short>), no GitHub Release.
+# tag vX.Y.Z[-pre] -> image X.Y.Z and X.Y (+ latest for stable), GitHub Release with deploy bundle, openapi.yaml, SHA256SUMS.
+# How to cut one: RELEASING.md.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: calendar-hub
+
+jobs:
+  guard:
+    name: tag matches VERSION
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check tag, VERSION and iOS marketing version agree
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -eu
+          if ! printf '%s' "$TAG" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::tag '$TAG' is not vX.Y.Z or vX.Y.Z-pre"; exit 1
+          fi
+          want="${TAG#v}"
+          have="$(tr -d ' \n\r' < VERSION)"
+          [ "$have" = "$want" ] || { echo "::error::tag $TAG but VERSION file says $have (use scripts/release.sh)"; exit 1; }
+          core="${want%%-*}"
+          grep -q "^    MARKETING_VERSION: \"$core\"" ios/project.yml || { echo "::error::ios/project.yml MARKETING_VERSION is not $core"; exit 1; }
+
+  test:
+    needs: guard
+    # guard is skipped on main; a skipped need would skip this too unless we say otherwise
+    if: ${{ !cancelled() && (needs.guard.result == 'success' || needs.guard.result == 'skipped') }}
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      pull-requests: read
+    with:
+      ios: false   # the iOS job runs from ci.yml itself; the server image does not depend on it
+
+  image:
+    name: build, smoke test, publish
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      image: ${{ steps.name.outputs.image }}
+      digest: ${{ steps.push.outputs.digest }}
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Image name (lowercased)
+        id: name
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # semver patterns only fire on tags. A pre-release tag (v1.0.0-rc.1) gets only its full version, never X.Y or latest.
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.name.outputs.image }}
+          flavor: |
+            latest=false
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
+            type=edge,branch=main
+            type=sha,prefix=sha-,format=short
+          labels: |
+            org.opencontainers.image.title=calendar-hub
+
+      # Build amd64 into the local daemon and run it: fixtures mode needs no secrets, no master key, no DB.
+      # The image is distroless, so `calendard health` is run with docker exec (no shell).
+      - name: Build amd64 for the smoke test
+        uses: docker/build-push-action@v6
+        with:
+          context: server
+          file: server/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: calendar-hub:smoke
+          build-args: VERSION=${{ steps.meta.outputs.version }}
+          cache-from: type=gha,scope=calendar-hub
+      - name: Smoke test
+        env:
+          WANT_VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -eu
+          docker run -d --name smoke -e CALENDAR_ADDR=0.0.0.0:8787 -p 127.0.0.1:18787:8787 calendar-hub:smoke serve --fixtures
+          ok=0
+          for _ in $(seq 1 20); do
+            if docker exec smoke calendard health; then ok=1; break; fi
+            sleep 1
+          done
+          docker logs smoke || true
+          [ "$ok" = 1 ] || { echo "health check never passed"; exit 1; }
+          [ "$(docker inspect -f '{{.Config.User}}' calendar-hub:smoke)" = "nonroot:nonroot" ]
+          # the binary must report the version it was built with (-X main.version) and the API version the app checks
+          hello="$(curl -fsS -H 'Authorization: Bearer cal_smoketest' http://127.0.0.1:18787/v1/hello)"
+          echo "$hello"
+          printf '%s' "$hello" | grep -q "\"version\":\"$WANT_VERSION\"" || { echo "::error::hub reports a different version than $WANT_VERSION"; exit 1; }
+          printf '%s' "$hello" | grep -q '"apiVersion":1' || { echo "::error::unexpected apiVersion"; exit 1; }
+          docker rm -f smoke
+
+      - name: Build and push (amd64 + arm64)
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: server
+          file: server/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: VERSION=${{ steps.meta.outputs.version }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=calendar-hub
+          cache-to: type=gha,scope=calendar-hub,mode=max
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ steps.name.outputs.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+  github-release:
+    name: GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write   # create the release and upload assets; nothing else in this workflow can write contents
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+      IMAGE: ${{ needs.image.outputs.image }}
+      DIGEST: ${{ needs.image.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build release assets
+        run: |
+          set -eu
+          ver="${TAG#v}"
+          out="$RUNNER_TEMP/assets"; stage="$RUNNER_TEMP/stage/calendar-deploy-$ver"
+          mkdir -p "$out" "$stage/deploy/secrets"
+
+          # explicit allow-list: never copy deploy/secrets/* or deploy/calendard.env
+          for f in README.md RUNBOOK.md SMOKE.md calendard.env.example compose.yaml compose.host-tailscale.yaml \
+                   first-run.sh backup-offsite.sh drill.sh serve.json; do
+            [ -f "deploy/$f" ] && cp "deploy/$f" "$stage/deploy/$f"
+          done
+          touch "$stage/deploy/secrets/.gitkeep"
+          cp VERSION "$stage/VERSION"
+
+          # override that runs the published image instead of building from source:
+          #   docker compose -f deploy/compose.host-tailscale.yaml -f deploy/compose.ghcr.yaml pull
+          cat > "$stage/deploy/compose.ghcr.yaml" <<YAML
+          services:
+            calendard:
+              image: ${IMAGE}:${ver}
+              pull_policy: always
+          YAML
+
+          tar -C "$RUNNER_TEMP/stage" -czf "$out/calendar-deploy-$ver.tar.gz" "calendar-deploy-$ver"
+          cp api/openapi.yaml "$out/openapi.yaml"
+          (cd "$out" && sha256sum calendar-deploy-"$ver".tar.gz openapi.yaml > SHA256SUMS && cat SHA256SUMS)
+          tar -tzf "$out/calendar-deploy-$ver.tar.gz"
+          if tar -tzf "$out/calendar-deploy-$ver.tar.gz" | grep -E 'secrets/[^.]|calendard\.env$|\.p8$'; then
+            echo "::error::bundle contains something that looks like a secret"; exit 1
+          fi
+
+      - name: Release notes (CHANGELOG section, else generated)
+        id: notes
+        run: |
+          set -eu
+          ver="${TAG#v}"
+          awk -v v="$ver" '
+            $0 ~ "^## \\[" v "\\]" {f=1; next}
+            f && /^## \[/ {f=0}
+            f && /^\[[^]]+\]: / {f=0}
+            f' CHANGELOG.md | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > "$RUNNER_TEMP/notes.md"
+          if grep -q '[^[:space:]]' "$RUNNER_TEMP/notes.md"; then
+            echo "source=changelog" >> "$GITHUB_OUTPUT"
+          else
+            echo "source=generated" >> "$GITHUB_OUTPUT"
+            : > "$RUNNER_TEMP/notes.md"
+          fi
+          {
+            echo
+            echo "### Install"
+            echo
+            echo "Hub image (linux/amd64, linux/arm64): \`${IMAGE}:${ver}\` (digest \`${DIGEST}\`)."
+            echo "Verify: \`gh attestation verify oci://${IMAGE}:${ver} --owner ${GITHUB_REPOSITORY_OWNER}\`."
+            echo "The deploy bundle and \`openapi.yaml\` are attached; check them against \`SHA256SUMS\`."
+            echo "The iOS app for this version is distributed through TestFlight (RELEASING.md)."
+          } >> "$RUNNER_TEMP/notes.md"
+
+      - name: Create or update the release
+        env:
+          NOTES_SOURCE: ${{ steps.notes.outputs.source }}
+        run: |
+          set -eu
+          ver="${TAG#v}"
+          assets=("$RUNNER_TEMP/assets/calendar-deploy-$ver.tar.gz" "$RUNNER_TEMP/assets/openapi.yaml" "$RUNNER_TEMP/assets/SHA256SUMS")
+          pre=()
+          case "$ver" in *-*) pre=(--prerelease) ;; *) pre=(--latest) ;; esac
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # re-run: replace assets, keep the release
+            gh release upload "$TAG" "${assets[@]}" --clobber
+          elif [ "$NOTES_SOURCE" = changelog ]; then
+            gh release create "$TAG" "${assets[@]}" --title "Calendar $ver" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag "${pre[@]}"
+          else
+            # no CHANGELOG section: let GitHub generate notes (categories in .github/release.yml), then append the install block
+            gh release create "$TAG" "${assets[@]}" --title "Calendar $ver" --generate-notes --notes-file "$RUNNER_TEMP/notes.md" --verify-tag "${pre[@]}"
+          fi

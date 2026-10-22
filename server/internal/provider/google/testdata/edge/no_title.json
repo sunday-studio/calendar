@@ -1,0 +1,25 @@
+{
+ "calendar": {
+  "access": "owner"
+ },
+ "event": {
+  "id": "a",
+  "status": "confirmed",
+  "start": {
+   "dateTime": "2026-10-14T09:00:00+01:00"
+  },
+  "end": {
+   "dateTime": "2026-10-14T09:30:00+01:00"
+  }
+ },
+ "want": {
+  "title": "",
+  "kind": "single",
+  "status": "confirmed",
+  "busy": true,
+  "allDay": false,
+  "canEdit": true,
+  "start": "2026-10-14T08:00:00Z",
+  "end": "2026-10-14T08:30:00Z"
+ }
+}

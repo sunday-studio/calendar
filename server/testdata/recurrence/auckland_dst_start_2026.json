@@ -1,0 +1,34 @@
+{
+  "name": "auckland_dst_start_2026",
+  "note": "NZDT starts Sun 2026-09-27 02:00",
+  "window": [
+    "2026-09-20T00:00:00Z",
+    "2026-10-10T00:00:00Z"
+  ],
+  "master": {
+    "allDay": false,
+    "start": "2026-09-25T09:00:00",
+    "tzid": "Pacific/Auckland",
+    "durationMin": 60,
+    "rrule": "FREQ=DAILY;COUNT=4"
+  },
+  "exceptions": [],
+  "expected": [
+    {
+      "start": "2026-09-24T21:00:00Z",
+      "end": "2026-09-24T22:00:00Z"
+    },
+    {
+      "start": "2026-09-25T21:00:00Z",
+      "end": "2026-09-25T22:00:00Z"
+    },
+    {
+      "start": "2026-09-26T20:00:00Z",
+      "end": "2026-09-26T21:00:00Z"
+    },
+    {
+      "start": "2026-09-27T20:00:00Z",
+      "end": "2026-09-27T21:00:00Z"
+    }
+  ]
+}

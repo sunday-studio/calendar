@@ -1,0 +1,64 @@
+# Calendar hub, DEFAULT variant for a Mac mini that already runs Tailscale: no sidecar, no auth key.
+# calendard is published on 127.0.0.1:8787 only (not on the LAN); the host's Tailscale terminates HTTPS:
+#
+#   docker compose -f deploy/compose.host-tailscale.yaml up -d --build
+#   tailscale serve --bg --https=443 http://127.0.0.1:8787
+#
+# Full walkthrough: docs/first-run.md. Do not run this together with deploy/compose.yaml (same project name).
+
+name: calendar
+
+services:
+  # One-shot: copies the two secret files into a volume owned by the image's `nonroot` user (uid 65532), because a 0600
+  # file from your Mac user may be unreadable by that uid through Docker's file sharing. Host file modes stay 0600.
+  # After changing a secret run `docker compose -f deploy/compose.host-tailscale.yaml up -d --force-recreate secrets-init calendard`.
+  secrets-init:
+    image: alpine:3
+    user: "0:0"
+    restart: "no"
+    command: ["sh", "-c", "set -e; for f in master_key google_client.json; do install -o 65532 -g 65532 -m 0400 /in/$$f /out/$$f; done"]
+    volumes:
+      - ./secrets/master_key:/in/master_key:ro
+      - ./secrets/google_client.json:/in/google_client.json:ro
+      - calendar-secrets:/out
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER, DAC_OVERRIDE]
+    read_only: true
+
+  calendard:
+    build:
+      context: ${CALENDAR_SERVER_CONTEXT:-../server}
+      args:
+        VERSION: ${CALENDAR_VERSION:-dev}
+    image: calendard:${CALENDAR_VERSION:-dev}
+    depends_on:
+      secrets-init: {condition: service_completed_successfully}
+    ports:
+      - "127.0.0.1:${CALENDAR_HOST_PORT:-8787}:8787"   # loopback of the Mac only; `tailscale serve` proxies to it
+    env_file: ./calendard.env
+    environment:
+      CALENDAR_ADDR: 0.0.0.0:8787       # inside the container; the published port above is what limits exposure
+      CALENDAR_DB: /data/calendar.db
+      CALENDAR_BACKUP_DIR: /data/backups
+      CALENDAR_MASTER_KEY_FILE: /run/calendar-secrets/master_key
+      CALENDAR_GOOGLE_CLIENT_FILE: /run/calendar-secrets/google_client.json
+      # push: add the .p8 to secrets-init (command + volume) and set CALENDAR_APNS_KEY_FILE: /run/calendar-secrets/apns_key.p8
+    volumes:
+      - data:/data
+      - calendar-secrets:/run/calendar-secrets:ro
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "calendard", "health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    stop_grace_period: 20s
+
+volumes:
+  data:
+  calendar-secrets:

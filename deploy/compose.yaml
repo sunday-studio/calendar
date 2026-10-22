@@ -1,0 +1,95 @@
+# Calendar hub: a Tailscale node (HTTPS via `tailscale serve`) and calendard sharing its network.
+# Nothing is published on the host. See deploy/README.md and deploy/RUNBOOK.md.
+#
+#   cp deploy/calendard.env.example deploy/calendard.env      # then edit it
+#   (create the secrets listed in deploy/README.md under deploy/secrets/)
+#   docker compose -f deploy/compose.yaml up -d --build      (builds server/Dockerfile locally; native arm64 on Apple Silicon)
+#
+# This is the ALTERNATIVE variant (Tailscale in a sidecar). On a Mac mini that already runs Tailscale, prefer
+# deploy/compose.host-tailscale.yaml (see docs/first-run.md). Do not run both at once: they share the project name.
+
+name: calendar
+
+services:
+  # One-shot: copies the two secret files into a volume owned by the image's `nonroot` user (uid 65532).
+  # Why: the hub image is distroless/nonroot. A 0600 file owned by your Mac user is bind-mounted into the Docker VM
+  # with an owner the container user may not match, so the hub could get "permission denied". Copying as root fixes
+  # it without loosening the host file modes (they stay 0600). After changing a secret run `docker compose -f deploy/compose.yaml up -d --force-recreate secrets-init calendard`.
+  secrets-init:
+    image: alpine:3
+    user: "0:0"
+    restart: "no"
+    command: ["sh", "-c", "set -e; for f in master_key google_client.json; do install -o 65532 -g 65532 -m 0400 /in/$$f /out/$$f; done"]
+    volumes:
+      - ./secrets/master_key:/in/master_key:ro
+      - ./secrets/google_client.json:/in/google_client.json:ro
+      - calendar-secrets:/out
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER, DAC_OVERRIDE]
+    read_only: true
+
+  tailscale:
+    image: tailscale/tailscale:stable
+    hostname: calendar
+    environment:
+      TS_HOSTNAME: calendar
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_EXTRA_ARGS: --advertise-tags=tag:calendar
+      TS_USERSPACE: "false"
+    # the auth key stays in a Docker secret; containerboot reads it from the environment
+    entrypoint: ["/bin/sh", "-c", "export TS_AUTHKEY=\"$$(cat /run/secrets/ts_key)\"; exec /usr/local/bin/containerboot"]
+    secrets: [ts_key]
+    volumes:
+      - ts-state:/var/lib/tailscale
+      - ./serve.json:/config/serve.json:ro
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add: [NET_ADMIN]
+    restart: unless-stopped
+
+  calendard:
+    # Built locally from server/Dockerfile (default). To use a published image instead, replace this block with
+    #   image: ${CALENDAR_IMAGE:-ghcr.io/sunday-studio/calendar-hub:edge}   (see docs/ci.md)
+    build:
+      context: ${CALENDAR_SERVER_CONTEXT:-../server}
+      args:
+        VERSION: ${CALENDAR_VERSION:-dev}
+    image: calendard:${CALENDAR_VERSION:-dev}
+    network_mode: service:tailscale          # listens on 127.0.0.1:8787 inside the tailnet node
+    depends_on:
+      tailscale: {condition: service_started}
+      secrets-init: {condition: service_completed_successfully}
+    env_file: ./calendard.env
+    environment:
+      CALENDAR_ADDR: 127.0.0.1:8787
+      CALENDAR_DB: /data/calendar.db
+      CALENDAR_BACKUP_DIR: /data/backups
+      CALENDAR_MASTER_KEY_FILE: /run/calendar-secrets/master_key
+      CALENDAR_GOOGLE_CLIENT_FILE: /run/calendar-secrets/google_client.json
+      # push (needs the apns_key secret below and the ids in calendard.env):
+      # CALENDAR_APNS_KEY_FILE: /run/calendar-secrets/apns_key.p8   (also add it to the secrets-init command and volumes)
+    volumes:
+      - data:/data
+      - calendar-secrets:/run/calendar-secrets:ro
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "calendard", "health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    stop_grace_period: 20s
+
+secrets:
+  ts_key:
+    file: ./secrets/ts_key
+
+volumes:
+  data:
+  ts-state:
+  calendar-secrets:

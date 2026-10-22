@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /server
+    schedule: {interval: weekly}
+    groups:
+      go-minor-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: {interval: weekly}
+  - package-ecosystem: docker
+    directory: /server
+    schedule: {interval: weekly}
+  - package-ecosystem: swift
+    directory: /ios/Packages/CalendarCore
+    schedule: {interval: weekly}

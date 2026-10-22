@@ -1,0 +1,31 @@
+{
+ "calendar": {
+  "access": "owner"
+ },
+ "event": {
+  "id": "a",
+  "summary": "",
+  "start": {
+   "dateTime": "2026-10-14T09:00:00Z"
+  },
+  "end": {
+   "dateTime": "2026-10-14T10:00:00Z"
+  },
+  "organizer": {
+   "email": "o@y.com"
+  },
+  "attendees": [
+   {
+    "email": "me@x.com",
+    "self": true,
+    "responseStatus": "needsAction"
+   }
+  ]
+ },
+ "want": {
+  "title": "",
+  "canEdit": false,
+  "canRSVP": true,
+  "busy": true
+ }
+}

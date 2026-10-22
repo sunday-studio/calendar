@@ -1,0 +1,21 @@
+{
+ "calendar": {
+  "access": "owner"
+ },
+ "event": {
+  "id": "f",
+  "eventType": "focusTime",
+  "summary": "Deep work",
+  "start": {
+   "dateTime": "2026-10-14T13:00:00+01:00"
+  },
+  "end": {
+   "dateTime": "2026-10-14T15:00:00+01:00"
+  },
+  "transparency": "opaque"
+ },
+ "want": {
+  "title": "Deep work",
+  "busy": true
+ }
+}

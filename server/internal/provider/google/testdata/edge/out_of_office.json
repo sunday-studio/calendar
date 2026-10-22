@@ -1,0 +1,26 @@
+{
+ "calendar": {
+  "access": "owner"
+ },
+ "event": {
+  "id": "o",
+  "eventType": "outOfOffice",
+  "summary": "Out of office",
+  "start": {
+   "dateTime": "2026-10-14T09:00:00+01:00"
+  },
+  "end": {
+   "dateTime": "2026-10-14T17:00:00+01:00"
+  },
+  "transparency": "opaque",
+  "outOfOfficeProperties": {
+   "autoDeclineMode": "declineNone"
+  }
+ },
+ "want": {
+  "title": "Out of office",
+  "busy": true,
+  "canEdit": false,
+  "allDay": false
+ }
+}

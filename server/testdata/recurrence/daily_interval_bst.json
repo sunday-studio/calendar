@@ -1,0 +1,30 @@
+{
+  "name": "daily_interval_bst",
+  "note": "BST is UTC+1 until 2026-10-25",
+  "window": [
+    "2026-10-01T00:00:00Z",
+    "2026-12-01T00:00:00Z"
+  ],
+  "master": {
+    "allDay": false,
+    "start": "2026-10-12T09:00:00",
+    "tzid": "Europe/London",
+    "durationMin": 60,
+    "rrule": "FREQ=DAILY;INTERVAL=2;COUNT=3"
+  },
+  "exceptions": [],
+  "expected": [
+    {
+      "start": "2026-10-12T08:00:00Z",
+      "end": "2026-10-12T09:00:00Z"
+    },
+    {
+      "start": "2026-10-14T08:00:00Z",
+      "end": "2026-10-14T09:00:00Z"
+    },
+    {
+      "start": "2026-10-16T08:00:00Z",
+      "end": "2026-10-16T09:00:00Z"
+    }
+  ]
+}

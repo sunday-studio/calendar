@@ -1,0 +1,9 @@
+bin/
+*.db
+*.db-wal
+*.db-shm
+*.test
+*.out
+.env
+.DS_Store
+Dockerfile

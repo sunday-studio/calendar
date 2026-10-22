@@ -1,0 +1,206 @@
+name: Calendar
+options:
+  bundleIdPrefix: dev.casprine
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    # Team ID comes from the environment at `xcodegen generate` time (DECISIONS H5). The Makefile defaults
+    # CALENDAR_TEAM_ID to the free Personal Team (2QG5WSN24S); release: `CALENDAR_TEAM_ID=<paid id> make ios-gen`.
+    # Always generate through make: a bare `xcodegen generate` with the var unset leaves the literal ${...} here.
+    DEVELOPMENT_TEAM: "${CALENDAR_TEAM_ID}"
+    "CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]": NO
+    CODE_SIGN_STYLE: Automatic
+    GENERATE_INFOPLIST_FILE: NO
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ITSAPPUSESNONEXEMPTENCRYPTION: NO   # only HTTPS/TLS and system crypto
+  configs:
+    Release:
+      SWIFT_COMPILATION_MODE: wholemodule
+      SWIFT_OPTIMIZATION_LEVEL: "-O"
+      DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+      ENABLE_TESTABILITY: NO
+      VALIDATE_PRODUCT: YES
+packages:
+  CalendarCore: { path: Packages/CalendarCore }
+  CalendarUI: { path: Packages/CalendarUI }
+  FeatureHome: { path: Packages/FeatureHome }
+  FeatureEvent: { path: Packages/FeatureEvent }
+  FeatureAccounts: { path: Packages/FeatureAccounts }
+  FeatureSettings: { path: Packages/FeatureSettings }
+  FeatureAssist: { path: Packages/FeatureAssist }
+  Surfaces: { path: Packages/Surfaces }
+targets:
+  Calendar:
+    type: application
+    platform: iOS
+    sources:
+      - Calendar
+    dependencies:
+      - package: CalendarCore
+      - package: CalendarUI
+      - package: FeatureHome
+      - package: FeatureEvent
+      - package: FeatureAccounts
+      - package: FeatureSettings
+      - package: FeatureAssist
+      - package: Surfaces
+        product: SurfacesCore
+      - package: Surfaces
+        product: SurfacesUI
+      - target: CalendarWidgets
+      - target: CalendarNotificationService
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.casprine.calendar
+        PRODUCT_NAME: Calendar
+        TARGETED_DEVICE_FAMILY: "1"
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+    postBuildScripts:
+      - name: ATS HTTPS only in Release
+        basedOnDependencyAnalysis: false
+        script: |
+          if [ "$CONFIGURATION" = "Release" ]; then
+            /usr/libexec/PlistBuddy -c "Delete :NSAppTransportSecurity" "$TARGET_BUILD_DIR/$INFOPLIST_PATH" 2>/dev/null || true
+          fi
+    entitlements:
+      path: Calendar/Calendar.entitlements
+      properties: &shared_entitlements
+        com.apple.security.application-groups: [group.dev.casprine.calendar]
+        keychain-access-groups: ["$(AppIdentifierPrefix)dev.casprine.calendar.shared"]
+        # Push (DECISIONS D S5): "development" is rewritten to "production" by the distribution profile at archive time.
+        aps-environment: development
+        com.apple.developer.usernotifications.time-sensitive: true
+    info:
+      path: Calendar/Info.plist
+      properties:
+        CFBundleDisplayName: Calendar
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ITSAppUsesNonExemptEncryption: false
+        NSMicrophoneUsageDescription: Calendar listens only while you hold the mic open in Add event, so you can say an event instead of typing it. Speech is turned into text on this phone and never leaves it.
+        NSSpeechRecognitionUsageDescription: Calendar turns what you say into text on this phone to fill in a new event. Nothing is sent to Apple or to your server until you tap Create.
+        NSLocalNetworkUsageDescription: Calendar connects to your own Calendar server on your home network.
+        UILaunchScreen: { UIColorName: LaunchBackground, UIImageName: LaunchMark, UIImageRespectsSafeAreaInsets: false }
+        # Debug only: plain http to localhost / local-network dev hubs. The Release build deletes this key
+        # (post-build script below), leaving ATS at its default: HTTPS only.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        UIAppFonts:
+          - Newsreader.ttf
+          - Newsreader-Italic.ttf
+          - SchibstedGrotesk.ttf
+          - DMMono-Regular.ttf
+          - DMMono-Medium.ttf
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UIBackgroundModes: [remote-notification, fetch]
+        BGTaskSchedulerPermittedIdentifiers: [dev.casprine.calendar.refresh]
+        NSSupportsLiveActivities: true
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.casprine.calendar
+            CFBundleURLSchemes: [calendar]
+  CalendarWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - CalendarWidgets
+      # Same fonts as the app (owned by design); widgets render in their own process.
+      - path: Calendar/Resources/Fonts
+        buildPhase: resources
+    dependencies:
+      - package: CalendarCore
+      - package: CalendarUI
+      - package: Surfaces
+        product: SurfacesCore
+      - package: Surfaces
+        product: SurfacesUI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.casprine.calendar.widgets
+        SKIP_INSTALL: YES
+    entitlements:
+      path: CalendarWidgets/CalendarWidgets.entitlements
+      properties: *shared_entitlements
+    info:
+      path: CalendarWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Calendar
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UIAppFonts:
+          - Newsreader.ttf
+          - Newsreader-Italic.ttf
+          - SchibstedGrotesk.ttf
+          - DMMono-Regular.ttf
+          - DMMono-Medium.ttf
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+  CalendarNotificationService:
+    type: app-extension
+    platform: iOS
+    sources:
+      - CalendarNotificationService
+    dependencies:
+      - package: CalendarCore
+      - package: Surfaces
+        product: SurfacesCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.casprine.calendar.notification-service
+        SKIP_INSTALL: YES
+    entitlements:
+      path: CalendarNotificationService/CalendarNotificationService.entitlements
+      properties: *shared_entitlements
+    info:
+      path: CalendarNotificationService/Info.plist
+      properties:
+        CFBundleDisplayName: Calendar Notifications
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+  CalendarTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [CalendarTests]
+    dependencies:
+      - target: Calendar
+      - package: CalendarCore
+      - package: CalendarUI
+      - package: FeatureAccounts
+      - package: FeatureHome
+      - package: FeatureSettings
+      - package: FeatureEvent
+      - package: FeatureAssist
+      - package: Surfaces
+        product: SurfacesCore
+      - package: Surfaces
+        product: SurfacesUI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.casprine.calendar.tests
+        GENERATE_INFOPLIST_FILE: YES
+  CalendarUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [CalendarUITests]
+    dependencies:
+      - target: Calendar
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.casprine.calendar.uitests
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  Calendar:
+    build:
+      targets:
+        Calendar: all
+    test:
+      targets: [CalendarTests, CalendarUITests]
