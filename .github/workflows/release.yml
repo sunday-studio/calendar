@@ -100,7 +100,7 @@ jobs:
       # Build amd64 into the local daemon and run it: fixtures mode needs no secrets, no master key, no DB.
       # The image is distroless, so `calendard health` is run with docker exec (no shell).
       - name: Build amd64 for the smoke test
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: server
           file: server/Dockerfile
@@ -132,7 +132,7 @@ jobs:
 
       - name: Build and push (amd64 + arm64)
         id: push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: server
           file: server/Dockerfile
