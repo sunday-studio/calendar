@@ -6,8 +6,11 @@ import (
 	"encoding/base32"
 	"errors"
 	"log/slog"
+	"strings"
 	gosync "sync"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
 
 	"calendar/server/internal/accounts"
 	"calendar/server/internal/agenda"
@@ -15,6 +18,7 @@ import (
 	"calendar/server/internal/domain"
 	"calendar/server/internal/provider"
 	syncer "calendar/server/internal/sync"
+	"calendar/server/internal/telemetry"
 	"calendar/server/internal/tz"
 )
 
@@ -65,10 +69,19 @@ func (s *Service) log() *slog.Logger {
 	return slog.Default()
 }
 
-func (s *Service) internal(what string, err error) *Error {
-	s.log().Error("events: "+what, "err", err)
+// internal records an unexpected failure and returns the opaque 5xx-style error. A failure to mirror a
+// change the provider already accepted is the dangerous case (consistency); everything else is a db or
+// internal error.
+func (s *Service) internal(ctx context.Context, what string, err error) *Error {
+	if strings.HasPrefix(what, "mirror") || what == "apply latest" {
+		consistency(ctx, "mirror_failed", err)
+	} else {
+		telemetry.RecordError(ctx, "events", err, telemetry.Operation(opName(ctx)), attribute.String("calendar.step", wordOf(what)))
+	}
 	return &Error{Kind: KProvider, Msg: "internal error"}
 }
+
+func wordOf(s string) string { return strings.ReplaceAll(strings.ToLower(s), " ", "_") }
 
 // remoteID derives a Google-safe client id (base32hex, lowercase) from a seed.
 func remoteID(seed string) string {
@@ -93,7 +106,7 @@ func (s *Service) begin(ctx context.Context, accountID string) (*sess, *Error) {
 		if errors.Is(err, accounts.ErrNotFound) {
 			return nil, fail(KNotFound, "", "no such account")
 		}
-		return nil, s.internal("account", err)
+		return nil, s.internal(ctx, "account", err)
 	}
 	l := s.Sync.Lock(accountID)
 	l.Lock()
@@ -101,7 +114,7 @@ func (s *Service) begin(ctx context.Context, accountID string) (*sess, *Error) {
 	a, err := s.Accounts.Get(ctx, accountID)
 	if err != nil {
 		l.Unlock()
-		return nil, s.internal("account", err)
+		return nil, s.internal(ctx, "account", err)
 	}
 	switch a.Status {
 	case accounts.StatusNeedsReauth:
@@ -116,6 +129,7 @@ func (s *Service) begin(ctx context.Context, accountID string) (*sess, *Error) {
 		l.Unlock()
 		return nil, fail(KUnavailable, "", "no provider for this account")
 	}
+	opFrom(ctx).setProvider(a.Provider)
 	return &sess{acct: *a, prov: p, unlock: l.Unlock}, nil
 }
 
@@ -155,12 +169,13 @@ func (s *Service) load(ctx context.Context, id string, scope provider.Scope, nee
 		return nil, fail(KNotFound, "", "no such event")
 	}
 	if err != nil {
-		return nil, s.internal("load event", err)
+		return nil, s.internal(ctx, "load event", err)
 	}
 	cal, err := loadCalendar(ctx, s.DB.R, r.CalendarID)
 	if err != nil {
-		return nil, s.internal("load calendar", err)
+		return nil, s.internal(ctx, "load calendar", err)
 	}
+	opFrom(ctx).setAccess(cal.Access)
 	t := &target{row: r, cal: cal, hasKey: hasKey && rk != 0}
 	t.ref = provider.Ref{Cal: cal, Event: r.Event}
 	switch r.Kind {
@@ -207,7 +222,7 @@ func (s *Service) load(ctx context.Context, id string, scope provider.Scope, nee
 	if needExceptions && t.master != nil {
 		ex, err := loadExceptions(ctx, s.DB.R, t.master.ID)
 		if err != nil {
-			return nil, s.internal("load exceptions", err)
+			return nil, s.internal(ctx, "load exceptions", err)
 		}
 		t.ref.Exceptions = ex
 	}
@@ -302,7 +317,7 @@ func touch(ctx context.Context, tx *db.Tx, eid string) error {
 // afterConflict mirrors the provider's latest state and builds the 409.
 func (s *Service) afterConflict(ctx context.Context, ss *sess, t *target, ce *provider.ConflictError) *Error {
 	if err := s.apply(ctx, t.cal, ce.Latest, nil); err != nil {
-		return s.internal("apply latest", err)
+		return s.internal(ctx, "apply latest", err)
 	}
 	s.Sync.Nudge(ss.acct.ID)
 	if cur := s.current(ctx, t.shown); cur != nil {
@@ -322,14 +337,19 @@ func (s *Service) afterConflict(ctx context.Context, ss *sess, t *target, ce *pr
 // providerFailure turns a provider error into a service error, mirroring state where needed.
 func (s *Service) providerFailure(ctx context.Context, ss *sess, t *target, err error) *Error {
 	var ce *provider.ConflictError
+	recordProviderWriteError(ctx, err)
 	switch {
 	case errors.As(err, &ce):
 		return s.afterConflict(ctx, ss, t, ce)
 	case errors.Is(err, provider.ErrNotFound) && t.row.RemoteID != "":
-		_ = s.apply(ctx, t.cal, provider.Result{Deleted: []string{t.row.RemoteID}}, nil)
+		if aerr := s.apply(ctx, t.cal, provider.Result{Deleted: []string{t.row.RemoteID}}, nil); aerr != nil {
+			telemetry.RecordError(ctx, "events", aerr, telemetry.Operation(opName(ctx)), attribute.String("calendar.step", "mirror_gone"))
+		}
 		return fail(KNotFound, "", "this event no longer exists")
 	case errors.Is(err, provider.ErrNeedsReauth):
-		_ = s.Accounts.MarkNeedsReauth(ctx, ss.acct.ID, "calendar provider rejected the credentials")
+		if merr := s.Accounts.MarkNeedsReauth(ctx, ss.acct.ID, "calendar provider rejected the credentials"); merr != nil {
+			telemetry.RecordError(ctx, "events", merr, telemetry.Operation(opName(ctx)), attribute.String("calendar.step", "mark_needs_reauth"))
+		}
 	}
 	return providerErr(err)
 }
@@ -356,7 +376,7 @@ func (s *Service) respond(ctx context.Context, ids ...string) (agenda.Event, err
 func (s *Service) respondErr(ctx context.Context, ids ...string) (agenda.Event, error) {
 	ev, err := s.respond(ctx, ids...)
 	if err != nil {
-		return ev, s.internal("read back", err)
+		return ev, s.internal(ctx, "read back", err)
 	}
 	return ev, nil
 }
@@ -375,7 +395,10 @@ func (s *Service) userTZ(ctx context.Context, cal domain.Calendar) string {
 
 // ---- create ----
 
-func (s *Service) Create(ctx context.Context, in CreateIn, o Opts) (agenda.Event, error) {
+func (s *Service) Create(ctx context.Context, in CreateIn, o Opts) (ev agenda.Event, err error) {
+	ctx, op := startOp(ctx, "create", "")
+	defer func() { op.done(ctx, err) }()
+
 	if e := checkText("title", in.Title, maxTitle); e != nil {
 		return agenda.Event{}, e
 	}
@@ -399,7 +422,7 @@ func (s *Service) Create(ctx context.Context, in CreateIn, o Opts) (agenda.Event
 		return agenda.Event{}, fail(KValidation, "calendarId", "no such calendar")
 	}
 	if err != nil {
-		return agenda.Event{}, s.internal("load calendar", err)
+		return agenda.Event{}, s.internal(ctx, "load calendar", err)
 	}
 	if !writable(cal) {
 		return agenda.Event{}, fail(KForbidden, "calendarId", "this calendar is read-only")
@@ -431,7 +454,7 @@ func (s *Service) Create(ctx context.Context, in CreateIn, o Opts) (agenda.Event
 		return agenda.Event{}, s.providerFailure(ctx, ss, &target{cal: cal}, err)
 	}
 	if len(res.Events) == 0 {
-		return agenda.Event{}, s.internal("create", errors.New("provider returned no event"))
+		return agenda.Event{}, s.internal(ctx, "create", errors.New("provider returned no event"))
 	}
 	var newID string
 	err = s.apply(ctx, cal, res, func(tx *db.Tx) error {
@@ -449,7 +472,7 @@ func (s *Service) Create(ctx context.Context, in CreateIn, o Opts) (agenda.Event
 		return nil
 	})
 	if err != nil {
-		return agenda.Event{}, s.internal("mirror create", err)
+		return agenda.Event{}, s.internal(ctx, "mirror create", err)
 	}
 	s.Sync.Nudge(ss.acct.ID)
 	return s.respondErr(ctx, newID)
@@ -583,7 +606,10 @@ func optInt(o provider.Opt[int]) *int {
 	return nil
 }
 
-func (s *Service) Patch(ctx context.Context, id string, scope provider.Scope, in PatchIn, o Opts) (agenda.Event, error) {
+func (s *Service) Patch(ctx context.Context, id string, scope provider.Scope, in PatchIn, o Opts) (ev agenda.Event, err error) {
+	ctx, op := startOp(ctx, "patch", scope)
+	defer func() { op.done(ctx, err) }()
+
 	scope, serr := scopeOf(scope)
 	if serr != nil {
 		return agenda.Event{}, serr
@@ -593,7 +619,7 @@ func (s *Service) Patch(ctx context.Context, id string, scope provider.Scope, in
 	}
 	if in.ReminderMin.Set && in.Title == nil && in.When == nil && !in.Location.Set && !in.Description.Set &&
 		!in.Attendees.Set && !in.Recurrence.Set && !in.Conference.Set {
-		return s.SetReminder(ctx, id, in.ReminderMin.Val) // hub-only: no provider, no lock
+		return s.reminderOnly(ctx, id, in.ReminderMin.Val) // hub-only: no provider, no lock
 	}
 	eid, _, _ := parseID(id)
 	acctID, err := accountOfEvent(ctx, s.DB.R, eid)
@@ -601,7 +627,7 @@ func (s *Service) Patch(ctx context.Context, id string, scope provider.Scope, in
 		return agenda.Event{}, fail(KNotFound, "", "no such event")
 	}
 	if err != nil {
-		return agenda.Event{}, s.internal("account of event", err)
+		return agenda.Event{}, s.internal(ctx, "account of event", err)
 	}
 	ss, e := s.begin(ctx, acctID)
 	if e != nil {
@@ -648,7 +674,7 @@ func (s *Service) Patch(ctx context.Context, id string, scope provider.Scope, in
 		return touch(ctx, tx, reid)
 	})
 	if err != nil {
-		return agenda.Event{}, s.internal("mirror patch", err)
+		return agenda.Event{}, s.internal(ctx, "mirror patch", err)
 	}
 	s.Sync.Nudge(ss.acct.ID)
 	return s.respondErr(ctx, s.shownAfter(ctx, t, scope, res)...)
@@ -719,7 +745,10 @@ func (s *Service) shownAfter(ctx context.Context, t *target, scope provider.Scop
 
 // ---- delete ----
 
-func (s *Service) Delete(ctx context.Context, id string, scope provider.Scope, o Opts) error {
+func (s *Service) Delete(ctx context.Context, id string, scope provider.Scope, o Opts) (err error) {
+	ctx, op := startOp(ctx, "delete", scope)
+	defer func() { op.done(ctx, err) }()
+
 	scope, serr := scopeOf(scope)
 	if serr != nil {
 		return serr
@@ -730,7 +759,7 @@ func (s *Service) Delete(ctx context.Context, id string, scope provider.Scope, o
 		return fail(KNotFound, "", "no such event")
 	}
 	if err != nil {
-		return s.internal("account of event", err)
+		return s.internal(ctx, "account of event", err)
 	}
 	ss, e := s.begin(ctx, acctID)
 	if e != nil {
@@ -756,7 +785,7 @@ func (s *Service) Delete(ctx context.Context, id string, scope provider.Scope, o
 		return s.providerFailure(ctx, ss, t, err)
 	}
 	if err := s.apply(ctx, t.cal, res, nil); err != nil {
-		return s.internal("mirror delete", err)
+		return s.internal(ctx, "mirror delete", err)
 	}
 	s.Sync.Nudge(ss.acct.ID)
 	return nil
@@ -764,7 +793,10 @@ func (s *Service) Delete(ctx context.Context, id string, scope provider.Scope, o
 
 // ---- RSVP ----
 
-func (s *Service) RSVP(ctx context.Context, id string, resp domain.Response, note string, scope provider.Scope, o Opts) (agenda.Event, error) {
+func (s *Service) RSVP(ctx context.Context, id string, resp domain.Response, note string, scope provider.Scope, o Opts) (ev agenda.Event, err error) {
+	ctx, op := startOp(ctx, "rsvp", scope)
+	defer func() { op.done(ctx, err) }()
+
 	switch resp {
 	case domain.Accepted, domain.Declined, domain.TentativeResponse:
 	default:
@@ -786,7 +818,7 @@ func (s *Service) RSVP(ctx context.Context, id string, resp domain.Response, not
 		return agenda.Event{}, fail(KNotFound, "", "no such event")
 	}
 	if err != nil {
-		return agenda.Event{}, s.internal("account of event", err)
+		return agenda.Event{}, s.internal(ctx, "account of event", err)
 	}
 	ss, e := s.begin(ctx, acctID)
 	if e != nil {
@@ -809,7 +841,7 @@ func (s *Service) RSVP(ctx context.Context, id string, resp domain.Response, not
 		return agenda.Event{}, s.providerFailure(ctx, ss, t, err)
 	}
 	if err := s.apply(ctx, t.cal, res, nil); err != nil {
-		return agenda.Event{}, s.internal("mirror rsvp", err)
+		return agenda.Event{}, s.internal(ctx, "mirror rsvp", err)
 	}
 	s.Sync.Nudge(ss.acct.ID)
 	return s.respondErr(ctx, s.shownAfter(ctx, t, scope, res)...)
@@ -817,14 +849,17 @@ func (s *Service) RSVP(ctx context.Context, id string, resp domain.Response, not
 
 // ---- Meet ----
 
-func (s *Service) AddMeet(ctx context.Context, id string, o Opts) (agenda.Event, error) {
+func (s *Service) AddMeet(ctx context.Context, id string, o Opts) (ev agenda.Event, err error) {
+	ctx, op := startOp(ctx, "meet", provider.ScopeAll)
+	defer func() { op.done(ctx, err) }()
+
 	eid, _, _ := parseID(id)
 	acctID, err := accountOfEvent(ctx, s.DB.R, eid)
 	if errors.Is(err, errGone) {
 		return agenda.Event{}, fail(KNotFound, "", "no such event")
 	}
 	if err != nil {
-		return agenda.Event{}, s.internal("account of event", err)
+		return agenda.Event{}, s.internal(ctx, "account of event", err)
 	}
 	ss, e := s.begin(ctx, acctID)
 	if e != nil {
@@ -847,7 +882,7 @@ func (s *Service) AddMeet(ctx context.Context, id string, o Opts) (agenda.Event,
 		return agenda.Event{}, s.providerFailure(ctx, ss, t, err)
 	}
 	if err := s.apply(ctx, t.cal, res, nil); err != nil {
-		return agenda.Event{}, s.internal("mirror meet", err)
+		return agenda.Event{}, s.internal(ctx, "mirror meet", err)
 	}
 	s.Sync.Nudge(ss.acct.ID)
 	return s.respondErr(ctx, t.shown, t.row.ID)
@@ -855,7 +890,14 @@ func (s *Service) AddMeet(ctx context.Context, id string, o Opts) (agenda.Event,
 
 // ---- reminder override (hub-only) ----
 
-func (s *Service) SetReminder(ctx context.Context, id string, minutes *int) (agenda.Event, error) {
+func (s *Service) SetReminder(ctx context.Context, id string, minutes *int) (ev agenda.Event, err error) {
+	ctx, op := startOp(ctx, "reminder", "")
+	defer func() { op.done(ctx, err) }()
+	return s.reminderOnly(ctx, id, minutes)
+}
+
+func (s *Service) reminderOnly(ctx context.Context, id string, minutes *int) (agenda.Event, error) {
+
 	if e := checkReminder(minutes); e != nil {
 		return agenda.Event{}, e
 	}
@@ -865,7 +907,7 @@ func (s *Service) SetReminder(ctx context.Context, id string, minutes *int) (age
 		return agenda.Event{}, fail(KNotFound, "", "no such event")
 	}
 	if err != nil {
-		return agenda.Event{}, s.internal("load event", err)
+		return agenda.Event{}, s.internal(ctx, "load event", err)
 	}
 	err = s.DB.Write(ctx, func(tx *db.Tx) error {
 		tx.Quiet = true
@@ -875,7 +917,7 @@ func (s *Service) SetReminder(ctx context.Context, id string, minutes *int) (age
 		return touch(ctx, tx, eid)
 	})
 	if err != nil {
-		return agenda.Event{}, s.internal("set reminder", err)
+		return agenda.Event{}, s.internal(ctx, "set reminder", err)
 	}
 	return s.respondErr(ctx, id, eid)
 }

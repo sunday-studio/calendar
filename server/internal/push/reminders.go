@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"calendar/server/internal/agenda"
+	"calendar/server/internal/telemetry"
 	"calendar/server/internal/tz"
 )
 
@@ -24,6 +25,9 @@ type due struct {
 // alertDefaults.allDay; no lead, no reminder. Timed events are reminded by local notifications on the
 // phone, which need no hub. One push per occurrence, ever.
 func (d *Dispatcher) ReminderTick(ctx context.Context, store *agenda.Store) error {
+	ctx, span := telemetry.StartSpan(ctx, "push.reminder_tick")
+	defer span.End()
+	telemetry.Inc(ctx, "push.reminder_ticks")
 	st, err := store.Settings(ctx)
 	if err != nil {
 		return err

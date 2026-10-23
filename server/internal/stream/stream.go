@@ -15,6 +15,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"calendar/server/internal/telemetry"
 )
 
 // Event is one SSE frame. ID 0 means "no id line".
@@ -102,6 +104,7 @@ func (b *Broker) unsubscribe(c *client) {
 
 // fanout must be called with b.mu held.
 func (b *Broker) fanout(e Event) {
+	telemetry.Inc(context.Background(), "sse.events_published", telemetry.Attr("type", e.Name))
 	for c := range b.subs {
 		select {
 		case c.ch <- e:
@@ -109,6 +112,7 @@ func (b *Broker) fanout(e Event) {
 			delete(b.subs, c)
 			close(c.ch)
 			b.dropped.Add(1)
+			telemetry.Inc(context.Background(), "sse.drops")
 			if b.Log != nil {
 				b.Log.Warn("sse client dropped (slow)")
 			}
@@ -173,9 +177,13 @@ func (b *Broker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Subscribe before reading the rev so no commit can fall between the two.
 	c := b.subscribe()
 	defer b.unsubscribe(c)
+	// the HTTP layer records a short connect span; here the lifecycle is counted (never one span per frame)
+	telemetry.Inc(ctx, "sse.connections", telemetry.Attr("event", "connect"))
+	defer telemetry.Inc(ctx, "sse.connections", telemetry.Attr("event", "disconnect"))
 
 	cur, err := b.Rev(ctx)
 	if err != nil {
+		telemetry.RecordError(ctx, "stream", err, telemetry.Operation("rev"))
 		h.Del("Content-Type")
 		http.Error(w, `{"error":{"code":"internal","message":"internal error"}}`, http.StatusInternalServerError)
 		return
@@ -223,4 +231,11 @@ func (b *Broker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+
+// RegisterGauges registers calendar.sse.clients (connected SSE clients). Call once after telemetry.Setup.
+func (b *Broker) RegisterGauges() func() {
+	return telemetry.GaugeSet("sse.clients", "SSE clients currently connected", "{client}", func(context.Context) []telemetry.Observation {
+		return []telemetry.Observation{{Value: float64(b.Clients())}}
+	})
 }

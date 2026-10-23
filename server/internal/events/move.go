@@ -14,7 +14,9 @@ import (
 // Move changes the calendar of an event. Within one account the provider moves it and the
 // event keeps its id. Across accounts it is create-then-delete (the delete is only attempted
 // after the create succeeded) and the event gets a new id; repeating series cannot cross accounts.
-func (s *Service) Move(ctx context.Context, id, calendarID string, o Opts) (agenda.Event, error) {
+func (s *Service) Move(ctx context.Context, id, calendarID string, o Opts) (ev agenda.Event, err error) {
+	ctx, op := startOp(ctx, "move", provider.ScopeAll)
+	defer func() { op.done(ctx, err) }()
 	if calendarID == "" {
 		return agenda.Event{}, fail(KValidation, "calendarId", "calendarId is required")
 	}
@@ -23,7 +25,7 @@ func (s *Service) Move(ctx context.Context, id, calendarID string, o Opts) (agen
 		return agenda.Event{}, fail(KValidation, "calendarId", "no such calendar")
 	}
 	if err != nil {
-		return agenda.Event{}, s.internal("load calendar", err)
+		return agenda.Event{}, s.internal(ctx, "load calendar", err)
 	}
 	if !writable(dest) {
 		return agenda.Event{}, fail(KForbidden, "calendarId", "this calendar is read-only")
@@ -34,7 +36,7 @@ func (s *Service) Move(ctx context.Context, id, calendarID string, o Opts) (agen
 		return agenda.Event{}, fail(KNotFound, "", "no such event")
 	}
 	if err != nil {
-		return agenda.Event{}, s.internal("account of event", err)
+		return agenda.Event{}, s.internal(ctx, "account of event", err)
 	}
 	if srcAcct == dest.AccountID {
 		return s.moveSame(ctx, id, dest, o)
@@ -88,7 +90,7 @@ func (s *Service) moveSame(ctx context.Context, id string, dest domain.Calendar,
 		return s.Sync.Materialiser().Rebuild(ctx, tx, []string{seriesID})
 	})
 	if err != nil {
-		return agenda.Event{}, s.internal("mirror move", err)
+		return agenda.Event{}, s.internal(ctx, "mirror move", err)
 	}
 	s.Sync.Nudge(ss.acct.ID)
 	shown := t.shown
@@ -147,7 +149,10 @@ func (s *Service) moveAcross(ctx context.Context, id, srcAcct string, dest domai
 	if _, err := src.prov.Delete(ctx, t.ref, provider.ScopeAll); err != nil {
 		// undo the copy so nothing is duplicated, then report the original failure
 		for _, c := range created.Events {
-			_, _ = dst.prov.Delete(ctx, provider.Ref{Acct: dst.acct, Cal: dest, Event: c}, provider.ScopeAll)
+			if _, derr := dst.prov.Delete(ctx, provider.Ref{Acct: dst.acct, Cal: dest, Event: c}, provider.ScopeAll); derr != nil {
+				// the copy could not be removed: the event now exists in both accounts
+				consistency(ctx, "move_copy_not_removed", derr)
+			}
 		}
 		return agenda.Event{}, s.providerFailure(ctx, src, t, err)
 	}
@@ -165,7 +170,7 @@ func (s *Service) moveAcross(ctx context.Context, id, srcAcct string, dest domai
 		return err
 	})
 	if err != nil {
-		return agenda.Event{}, s.internal("mirror move", err)
+		return agenda.Event{}, s.internal(ctx, "mirror move", err)
 	}
 	s.Sync.Nudge(src.acct.ID)
 	s.Sync.Nudge(dst.acct.ID)

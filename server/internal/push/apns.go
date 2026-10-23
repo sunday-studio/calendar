@@ -18,14 +18,21 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"sync"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
+	"calendar/server/internal/telemetry"
 )
 
 // Message is one notification for one device.
 type Message struct {
+	Kind       string // sync | moved | cancelled | changed | reauth | summary | reminder (telemetry label only; not sent)
 	Type       string // "alert" | "background"
 	Priority   int    // 10 immediate, 5 power-friendly
 	CollapseID string
@@ -42,6 +49,8 @@ var (
 	ErrUnregistered = errors.New("apns: device token is no longer valid")
 	// ErrTransient is a failure worth retrying later (rate limit, 5xx, network).
 	ErrTransient = errors.New("apns: temporary failure")
+	// ErrThrottled is the 429 flavour of ErrTransient (also matches errors.Is(err, ErrTransient)).
+	ErrThrottled = errors.New("apns: throttled")
 )
 
 // Sender delivers a message. The real one is *APNs; tests use a recording fake.
@@ -104,6 +113,10 @@ func NewAPNs(cfg APNsConfig) (*APNs, error) {
 	if cfg.Client == nil {
 		cfg.Client = &http.Client{Timeout: 20 * time.Second}
 	}
+	// client spans for APNs calls: templated path (the device token never reaches a span), no query, no headers
+	traced := *cfg.Client
+	traced.Transport = telemetry.WrapClient(traced.Transport, "apns")
+	cfg.Client = &traced
 	if cfg.BaseURL == nil {
 		cfg.BaseURL = map[string]string{"sandbox": sandboxURL, "production": productionURL}
 	}
@@ -207,8 +220,14 @@ func (a *APNs) Send(ctx context.Context, t Target, m Message) error {
 		}
 		resp, err := a.cfg.Client.Do(req)
 		if err != nil {
+			// a *url.Error embeds the request URL, which contains the device token: keep only the cause
+			var ue *url.Error
+			if errors.As(err, &ue) {
+				err = ue.Err
+			}
 			return fmt.Errorf("%w: %v", ErrTransient, err)
 		}
+		trace.SpanFromContext(ctx).SetAttributes(attribute.Int("http.response.status_code", resp.StatusCode))
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		resp.Body.Close()
 		if resp.StatusCode == http.StatusOK {
@@ -222,7 +241,9 @@ func (a *APNs) Send(ctx context.Context, t Target, m Message) error {
 			continue
 		case resp.StatusCode == 410, e.Reason == "Unregistered", e.Reason == "BadDeviceToken", e.Reason == "DeviceTokenNotForTopic":
 			return fmt.Errorf("%w (%s)", ErrUnregistered, e.Reason)
-		case resp.StatusCode == 429, resp.StatusCode >= 500:
+		case resp.StatusCode == 429:
+			return fmt.Errorf("%w: %w: HTTP %d %s", ErrTransient, ErrThrottled, resp.StatusCode, e.Reason)
+		case resp.StatusCode >= 500:
 			return fmt.Errorf("%w: HTTP %d %s", ErrTransient, resp.StatusCode, e.Reason)
 		}
 		return fmt.Errorf("apns: HTTP %d %s", resp.StatusCode, e.Reason)

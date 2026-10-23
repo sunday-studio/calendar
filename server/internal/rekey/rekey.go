@@ -7,7 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	"calendar/server/internal/db"
+	"calendar/server/internal/telemetry"
 	"calendar/server/internal/vault"
 )
 
@@ -16,8 +19,15 @@ type Result struct{ Accounts, Automations int }
 
 // Run opens every sealed value with oldV and seals it again with newV. Nothing changes if any
 // value cannot be opened with the old key (wrong key, or damaged data).
-func Run(ctx context.Context, d *db.DB, oldV, newV *vault.Vault) (Result, error) {
-	var res Result
+func Run(ctx context.Context, d *db.DB, oldV, newV *vault.Vault) (res Result, rerr error) {
+	ctx, span := telemetry.StartSpan(ctx, "rekey.run")
+	defer func() {
+		span.SetAttributes(attribute.Int("calendar.rekey.accounts", res.Accounts), attribute.Int("calendar.rekey.automations", res.Automations))
+		if rerr != nil {
+			telemetry.RecordError(ctx, "rekey", rerr, telemetry.Operation("rekey"))
+		}
+		span.End()
+	}()
 	err := d.Write(ctx, func(tx *db.Tx) error {
 		rs, err := tx.QueryContext(ctx, `SELECT id, secret FROM accounts`)
 		if err != nil {

@@ -14,6 +14,7 @@ import (
 
 	"calendar/server/internal/agenda"
 	"calendar/server/internal/api"
+	"calendar/server/internal/telemetry"
 )
 
 const (
@@ -327,13 +328,17 @@ func (s *Server) stateData() *Data {
 	return &d
 }
 
-func (s *Server) Handler() http.Handler {
+// Handler is the fixtures hub wrapped with the same request telemetry as the real hub (a no-op until
+// OTEL_* variables turn it on): a server span and calendar.http.* metrics per route pattern.
+func (s *Server) Handler() http.Handler { return telemetry.HTTP(s.handler()) }
+
+func (s *Server) handler() http.Handler {
 	if s.State != "" && s.State != "normal" {
 		s2 := *s
 		s2.Data = s.stateData()
 		s2.warn = s.State == "banner"
 		s2.State = ""
-		return s.withState(s2.Handler())
+		return s.withState(s2.handler())
 	}
 	return s.baseHandler()
 }
@@ -362,11 +367,10 @@ func (s *Server) withState(next http.Handler) http.Handler {
 			}
 		case "offline":
 			if !isHello {
-				if hj, ok := w.(http.Hijacker); ok {
-					if c, _, err := hj.Hijack(); err == nil {
-						c.Close() // the client sees a reset connection, as if the hub vanished
-						return
-					}
+				// ResponseController finds Hijack through the telemetry wrappers (they implement Unwrap)
+				if c, _, err := http.NewResponseController(w).Hijack(); err == nil {
+					c.Close() // the client sees a reset connection, as if the hub vanished
+					return
 				}
 				w.WriteHeader(http.StatusServiceUnavailable)
 				return
@@ -420,7 +424,7 @@ func (s *Server) baseHandler() http.Handler {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		api.WriteError(w, 404, api.CodeNotFound, "not available in fixtures mode", "")
 	})
-	return mux
+	return telemetry.Route(mux)
 }
 
 func (s *Server) hello(w http.ResponseWriter, r *http.Request) {

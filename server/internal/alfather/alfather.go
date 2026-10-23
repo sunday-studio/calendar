@@ -19,6 +19,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"calendar/server/internal/quickadd"
+	"calendar/server/internal/telemetry"
 	"calendar/server/internal/tz"
 )
 
@@ -83,20 +84,40 @@ func (c Config) timeout() time.Duration {
 }
 
 // Parse implements quickadd.Parser.
-func (p *Parser) Parse(ctx context.Context, req quickadd.Request) (quickadd.Draft, error) {
-	d, err := p.ask(ctx, req)
+func (p *Parser) Parse(ctx context.Context, req quickadd.Request) (out quickadd.Draft, rerr error) {
+	ctx, span := telemetry.StartSpan(ctx, "quickadd.parse", telemetry.Attr("source", "alfather"))
+	defer func() { quickadd.RecordParse(ctx, out, rerr); span.End() }()
+	began := time.Now()
+	d, err := p.askObserved(ctx, req)
+	telemetry.Record(ctx, "alfather.latency", time.Since(began).Seconds())
 	if err == nil {
 		return d, nil
 	}
-	if p.Log != nil {
-		p.Log.Warn("alfather parse failed; using rules", "err", err.Error())
+	// a failed or slow assistant is not a failed request: the rule parser answers, flagged degraded
+	if errors.Is(err, context.DeadlineExceeded) {
+		telemetry.Inc(ctx, "alfather.timeouts")
+		telemetry.RecordErrorKind(ctx, "alfather", telemetry.KindTimeout, err, telemetry.Operation("parse"))
+	} else if ctx.Err() == nil {
+		telemetry.RecordError(ctx, "alfather", err, telemetry.Operation("parse"))
 	}
-	fd, ferr := p.Fallback.Parse(ctx, req)
+	span.SetAttributes(telemetry.Attr("degraded", "true"))
+	lg := p.Log
+	if lg == nil {
+		lg = slog.Default()
+	}
+	lg.WarnContext(ctx, "alfather parse failed; using rules", "err", telemetry.Sanitize(err.Error()))
+	fd, ferr := p.Fallback.Parse(quickadd.WithoutMetrics(ctx), req)
 	if ferr != nil {
 		return fd, ferr
 	}
 	fd.Source, fd.Degraded = "rules", true
 	return fd, nil
+}
+
+func (p *Parser) askObserved(ctx context.Context, req quickadd.Request) (quickadd.Draft, error) {
+	ctx, span := telemetry.StartSpan(ctx, "alfather.ask")
+	defer span.End()
+	return p.ask(ctx, req)
 }
 
 func (p *Parser) now() time.Time {
@@ -144,6 +165,8 @@ func (p *Parser) ask(parent context.Context, req quickadd.Request) (quickadd.Dra
 	if p.Cfg.Token != "" {
 		hc = &http.Client{Transport: bearer{p.Cfg.Token, hc.Transport}, Timeout: hc.Timeout}
 	}
+	// client spans for the assistant call (templated path, no headers, so the bearer token never shows)
+	hc = &http.Client{Transport: telemetry.WrapClientRedacted(hc.Transport, "alfather", "/mcp"), Timeout: hc.Timeout}
 	client := mcp.NewClient(&mcp.Implementation{Name: "calendard", Version: "1"}, nil)
 	sess, err := client.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: p.Cfg.URL, HTTPClient: hc, MaxRetries: -1, DisableStandaloneSSE: true}, nil)
 	if err != nil {

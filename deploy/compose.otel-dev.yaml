@@ -1,0 +1,22 @@
+# Optional local telemetry stack for trying the hub's OpenTelemetry output. Not part of production.
+#   docker compose -f compose.otel-dev.yaml up -d
+#   Grafana (traces/metrics/logs, no login): http://localhost:3000   Explore > Tempo / Prometheus / Loki
+# Point the hub at it:
+#   hub on the host (make run):   OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+#   hub in a container:           OTEL_EXPORTER_OTLP_ENDPOINT=http://host.docker.internal:4318
+#     (host.docker.internal resolves on Docker Desktop and OrbStack for macOS; on Linux add
+#      `extra_hosts: ["host.docker.internal:host-gateway"]` to the hub service, or join the same compose network
+#      and use http://otel-lgtm:4318)
+# grafana/otel-lgtm is one container: OpenTelemetry Collector + Tempo + Prometheus + Loki + Grafana.
+# Ports are published on loopback only. Data lives in the container (docker compose down -v wipes it).
+services:
+  otel-lgtm:
+    image: grafana/otel-lgtm:latest   # dev only; pin a version if you keep it around
+    ports:
+      - "127.0.0.1:3000:3000"   # Grafana
+      - "127.0.0.1:4317:4317"   # OTLP gRPC
+      - "127.0.0.1:4318:4318"   # OTLP HTTP
+    volumes:
+      - otel-lgtm-data:/data
+volumes:
+  otel-lgtm-data:

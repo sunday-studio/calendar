@@ -18,6 +18,7 @@ import (
 	"calendar/server/internal/domain"
 	"calendar/server/internal/provider"
 	"calendar/server/internal/recur"
+	"calendar/server/internal/telemetry"
 	"calendar/server/internal/tz"
 )
 
@@ -29,6 +30,7 @@ var meetPoll = 400 * time.Millisecond
 
 // send performs one write request. ifMatch (a Google etag, quotes included) becomes If-Match.
 func (p *Provider) send(ctx context.Context, accountID, method, path string, q url.Values, body any, ifMatch string, out any) error {
+	ctx = telemetry.WithProvider(ctx, "google")
 	var payload []byte
 	if body != nil {
 		var err error
@@ -59,12 +61,15 @@ func (p *Provider) send(ctx context.Context, accountID, method, path string, q u
 		if ifMatch != "" {
 			req.Header.Set("If-Match", ifMatch)
 		}
+		began := time.Now()
 		resp, err := cl.Do(req)
 		if err != nil {
+			observe(ctx, operation(ctx, method, path), began, nil, nil, err)
 			return mapTransportErr(err)
 		}
 		data, rerr := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
 		resp.Body.Close()
+		observe(ctx, operation(ctx, method, path), began, resp, data, rerr)
 		if rerr != nil {
 			return rerr
 		}
@@ -497,6 +502,7 @@ func cancelledInstance(id, masterID string, key int64) domain.Event {
 // ---- RSVP ----
 
 func (p *Provider) RSVP(ctx context.Context, ref provider.Ref, r domain.Response, note string, scope provider.Scope) (provider.Result, error) {
+	ctx = withOp(ctx, "rsvp")
 	if scope == provider.ScopeFollowing {
 		return provider.Result{}, fmt.Errorf("%w: replies cannot target following events", provider.ErrNotSupported)
 	}
@@ -564,6 +570,7 @@ func (p *Provider) AddConference(ctx context.Context, ref provider.Ref) (provide
 // ---- move (same account) ----
 
 func (p *Provider) Move(ctx context.Context, ref provider.Ref, to domain.Calendar) (provider.Result, error) {
+	ctx = withOp(ctx, "move")
 	tg, err := p.resolve(ctx, ref, provider.ScopeAll)
 	if err != nil {
 		return provider.Result{}, err
@@ -799,7 +806,11 @@ func (p *Provider) updateFollowing(ctx context.Context, ref provider.Ref, pt pro
 		map[string]any{"recurrence": append([]string{"RRULE:" + endBefore(m.Recurrence.RRule, key, m.When.AllDay)},
 			append(splitLines(m.Recurrence.RDates, loc, key, false), splitLines(m.Recurrence.EXDates, loc, key, false)...)...)}, m.ETag, &og)
 	if err != nil {
-		_ = p.send(ctx, ref.Acct.ID, http.MethodDelete, evPath(ref.Cal, ng.ID), url.Values{"sendUpdates": {"none"}}, nil, "", nil)
+		if uerr := p.send(ctx, ref.Acct.ID, http.MethodDelete, evPath(ref.Cal, ng.ID), url.Values{"sendUpdates": {"none"}}, nil, "", nil); uerr != nil {
+			// the undo failed: the split-off series now exists next to the original (a duplicate)
+			telemetry.Inc(ctx, "writes.provider_rollbacks", telemetry.Attr("op", "patch"), telemetry.Attr("kind", "split_undo_failed"))
+			telemetry.RecordErrorKind(ctx, "provider.google", telemetry.KindConsistency, uerr, telemetry.Operation("split_undo"))
+		}
 		return provider.Result{}, wrapPrecondition(err, func() error { return p.conflict(ctx, ref.Acct.ID, ref.Cal, m.RemoteID) })
 	}
 	res := provider.Result{Events: []domain.Event{p.mapOne(og, ref.Cal)}}

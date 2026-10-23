@@ -18,6 +18,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"calendar/server/internal/db"
+	"calendar/server/internal/telemetry"
 )
 
 const SessionTTL = 10 * time.Minute
@@ -106,9 +107,16 @@ func (g *Google) AuthURL(state, verifier string) string {
 
 // Exchange trades the code (+PKCE verifier) for tokens and resolves the identity.
 func (g *Google) Exchange(ctx context.Context, code, verifier string) (*Identity, error) {
+	ctx, span := telemetry.StartSpan(ctx, "oauth.exchange", telemetry.Provider("google"))
+	defer span.End()
+	// client span per call to Google's token and userinfo endpoints (templated URL, no query: the code never shows)
+	hc := http.DefaultClient
 	if g.HTTP != nil {
-		ctx = context.WithValue(ctx, oauth2.HTTPClient, g.HTTP)
+		hc = g.HTTP
 	}
+	traced := *hc
+	traced.Transport = telemetry.WrapClient(hc.Transport, "google")
+	ctx = context.WithValue(ctx, oauth2.HTTPClient, &traced)
 	tok, err := g.cfg.Exchange(ctx, code, oauth2.VerifierOption(verifier))
 	if err != nil {
 		return nil, err

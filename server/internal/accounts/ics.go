@@ -13,6 +13,7 @@ import (
 	"calendar/server/internal/db"
 	"calendar/server/internal/domain"
 	"calendar/server/internal/provider/ics"
+	"calendar/server/internal/telemetry"
 )
 
 // ICSInvalidError is a feed URL problem to show the user (HTTP 422, field "url"). The message
@@ -122,10 +123,17 @@ func (s *Service) CreateICS(ctx context.Context, rawURL, name, color string) (ac
 		return tx.Change(ctx, "account", id, "upsert")
 	})
 	if err != nil {
+		var ie *ICSInvalidError
+		if !errors.As(err, &ie) {
+			telemetry.RecordError(ctx, "accounts", err, telemetry.Operation("create_ics"))
+		}
 		return nil, false, err
 	}
-	if created && s.OnStatus != nil {
-		s.OnStatus(id, StatusConnecting)
+	if created {
+		lifecycle(ctx, "connected", id, "ics")
+		if s.OnStatus != nil {
+			s.OnStatus(id, StatusConnecting)
+		}
 	}
 	acc, err = s.Get(ctx, id)
 	return acc, created, err
@@ -170,8 +178,14 @@ func (s *Service) SetICSURL(ctx context.Context, id, rawURL string) (*domain.Acc
 		return tx.Change(ctx, "account", id, "upsert")
 	})
 	if err != nil {
+		var ie *ICSInvalidError
+		if !errors.As(err, &ie) {
+			telemetry.RecordError(ctx, "accounts", err, telemetry.Operation("set_ics_url"))
+		}
 		return nil, err
 	}
+	telemetry.Inc(ctx, "sync.cursor_resets", telemetry.Provider("ics"), telemetry.Attr("reason", "manual"))
+	lifecycle(ctx, "reconnected", id, "ics")
 	if s.OnStatus != nil {
 		s.OnStatus(id, StatusConnecting)
 	}

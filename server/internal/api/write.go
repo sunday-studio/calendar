@@ -382,6 +382,7 @@ func (s *Server) idempotent(h http.HandlerFunc) http.HandlerFunc {
 				WriteError(w, http.StatusUnprocessableEntity, CodeValidation, "this Idempotency-Key was already used with a different request", "Idempotency-Key")
 				return
 			}
+			events.RecordReplay(r.Context(), replayOp(r.Method))
 			w.Header().Set("Idempotent-Replayed", "true")
 			if status == http.StatusNoContent {
 				w.WriteHeader(status)
@@ -418,4 +419,17 @@ func (s *Server) idempotent(h http.HandlerFunc) http.HandlerFunc {
 			s.Log.Error("idempotency store", "err", err)
 		}
 	}
+}
+
+// replayOp names a replayed write by its method, a short word so it is a bounded metric attribute.
+func replayOp(method string) string {
+	switch method {
+	case http.MethodPost:
+		return "create"
+	case http.MethodPatch:
+		return "patch"
+	case http.MethodDelete:
+		return "delete"
+	}
+	return "write"
 }

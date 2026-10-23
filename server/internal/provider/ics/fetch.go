@@ -166,7 +166,7 @@ func safeClient(policy func(netip.AddrPort) bool, timeout time.Duration, maxRedi
 	}
 	return &http.Client{
 		Timeout:   timeout,
-		Transport: rt,
+		Transport: traced(rt),
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) > maxRedirects {
 				return userErr("The calendar link redirects too many times.")
@@ -229,11 +229,14 @@ func (p *Provider) fetch(ctx context.Context, raw string, prev cursor) (*fetched
 	if prev.LastModified != "" {
 		req.Header.Set("If-Modified-Since", prev.LastModified)
 	}
+	began := time.Now()
 	resp, err := p.client.Do(req)
 	if err != nil {
+		observeFetch(ctx, began, 0, err)
 		return nil, cleanErr(err)
 	}
 	defer resp.Body.Close()
+	observeFetch(ctx, began, resp.StatusCode, nil)
 	switch {
 	case resp.StatusCode == http.StatusNotModified && (prev.ETag != "" || prev.LastModified != ""):
 		return &fetched{notModified: true, cur: prev}, nil

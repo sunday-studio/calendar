@@ -15,11 +15,16 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	"calendar/server/internal/accounts"
 	"calendar/server/internal/db"
 	"calendar/server/internal/domain"
 	"calendar/server/internal/provider"
+	"calendar/server/internal/provider/ics"
+	"calendar/server/internal/telemetry"
 )
 
 type Trigger int
@@ -60,11 +65,12 @@ type Manager struct {
 	// Interval overrides the poll cadence per provider (accounts.provider), e.g. "ics" -> 15m.
 	Interval map[string]time.Duration
 
-	mu      gosync.Mutex
-	workers map[string]*worker
-	locks   map[string]*gosync.Mutex
-	ctx     context.Context
-	wg      gosync.WaitGroup
+	mu       gosync.Mutex
+	backoffs map[string]time.Duration // current retry delay per failing account (calendar.sync.backoff_seconds)
+	workers  map[string]*worker
+	locks    map[string]*gosync.Mutex
+	ctx      context.Context
+	wg       gosync.WaitGroup
 }
 
 type worker struct {
@@ -178,15 +184,25 @@ func (m *Manager) Run(ctx context.Context) error {
 		RunDaily(context.Context, *db.DB, time.Duration)
 	}); ok {
 		m.wg.Add(1)
-		go func() { defer m.wg.Done(); ext.RunDaily(ctx, m.DB, 24*time.Hour) }()
+		go func() {
+			defer m.wg.Done()
+			telemetry.Supervise(ctx, "recur.extend_window", func(ctx context.Context) { ext.RunDaily(ctx, m.DB, 24*time.Hour) })
+		}()
 	}
 	m.wg.Add(1)
-	go func() { defer m.wg.Done(); m.runPruner(ctx, 24*time.Hour) }()
+	go func() {
+		defer m.wg.Done()
+		telemetry.Supervise(ctx, "sync.pruner", func(ctx context.Context) { m.runPruner(ctx, 24*time.Hour) })
+	}()
 	t := time.NewTicker(dur(m.Reconcile, 5*time.Second))
 	defer t.Stop()
 	for {
-		if err := m.reconcile(ctx); err != nil && ctx.Err() == nil {
-			m.log().Error("sync reconcile", "err", err)
+		if telemetry.Safe(ctx, "sync.reconcile", func() {
+			if err := m.reconcile(ctx); err != nil && ctx.Err() == nil {
+				telemetry.RecordError(ctx, "sync", err, telemetry.Operation("reconcile"))
+			}
+		}) {
+			continue
 		}
 		select {
 		case <-ctx.Done():
@@ -246,7 +262,7 @@ func (m *Manager) ensureWorker(id string) *worker {
 			m.mu.Unlock()
 			cancel()
 		}()
-		m.runWorker(ctx, w)
+		telemetry.Safe(ctx, "sync.worker", func() { m.runWorker(ctx, w) }) // reconcile restarts a worker that died
 	}()
 	return w
 }
@@ -324,7 +340,11 @@ func (m *Manager) runWorker(ctx context.Context, w *worker) {
 			return // deleted, paused or needs sign-in; reconcile restarts us when eligible again
 		}
 		w.running.Store(true)
-		retry, err := m.syncAccount(ctx, w.id, trig)
+		var retry time.Duration
+		if telemetry.Safe(ctx, "sync.pass", func() { retry, err = m.syncAccount(ctx, w.id, trig) }) {
+			// a panic inside one pass must not end the worker: back off and try again
+			retry, err = m.backoff(1), errPassPanicked
+		}
 		w.running.Store(false)
 		if ctx.Err() != nil {
 			return
@@ -345,6 +365,8 @@ func (m *Manager) SyncAccount(ctx context.Context, id string, trig Trigger) erro
 	_, err := m.syncAccount(ctx, id, trig)
 	return err
 }
+
+var errPassPanicked = errors.New("sync pass panicked")
 
 func errKind(err error) string {
 	var rl provider.ErrRateLimited
@@ -384,8 +406,21 @@ func (m *Manager) logRun(ctx context.Context, accountID, calID string, start tim
 		return e
 	})
 	if werr != nil {
-		m.log().Error("sync_runs insert", "err", werr)
+		telemetry.RecordError(ctx, "sync", werr, telemetry.Operation("log_run"))
 	}
+}
+
+func runOutcome(err error) string {
+	var rl provider.ErrRateLimited
+	switch {
+	case err == nil:
+		return "ok"
+	case errors.Is(err, provider.ErrNeedsReauth):
+		return "needs_reauth"
+	case errors.As(err, &rl):
+		return "rate_limited"
+	}
+	return "error"
 }
 
 func (m *Manager) syncAccount(ctx context.Context, id string, trig Trigger) (retry time.Duration, err error) {
@@ -393,17 +428,41 @@ func (m *Manager) syncAccount(ctx context.Context, id string, trig Trigger) (ret
 	if err != nil {
 		return 0, err
 	}
+	prov := m.Providers[acct.Provider]
+	pname := telemetry.Provider(acct.Provider)
 	if !eligible(acct.Status) {
+		telemetry.Inc(ctx, "sync.runs", pname, telemetry.SyncTrigger(trig.String()), telemetry.Outcome("skipped"))
 		return 0, nil
 	}
-	prov := m.Providers[acct.Provider]
+	ctx, span := telemetry.StartSpan(ctx, "sync.run", telemetry.AccountID(id), pname, telemetry.SyncTrigger(trig.String()))
+	defer span.End()
+	wall := time.Now()
 	if prov == nil {
-		return m.fail(ctx, acct, fmt.Errorf("no provider for %q", acct.Provider))
+		err = fmt.Errorf("no provider for %q", acct.Provider)
+		telemetry.RecordError(ctx, "sync", err, telemetry.Operation("provider_lookup"))
+		telemetry.Inc(ctx, "sync.runs", pname, telemetry.SyncTrigger(trig.String()), telemetry.Outcome("error"))
+		return m.fail(ctx, acct, err)
 	}
 	start := m.now()
 	var total stats
 	m.emit(id, "started")
 	defer func() {
+		outcome := runOutcome(err)
+		span.SetAttributes(attribute.String("calendar.sync.outcome", outcome),
+			attribute.Int("calendar.sync.added", total.added), attribute.Int("calendar.sync.changed", total.changed), attribute.Int("calendar.sync.removed", total.removed))
+		telemetry.Inc(ctx, "sync.runs", pname, telemetry.SyncTrigger(trig.String()), telemetry.Outcome(outcome))
+		telemetry.Record(ctx, "sync.duration", time.Since(wall).Seconds(), pname)
+		for c, n := range map[string]int{"added": total.added, "changed": total.changed, "removed": total.removed} {
+			if n > 0 {
+				telemetry.Add(ctx, "sync.events", int64(n), pname, telemetry.Attr("change", c))
+			}
+		}
+		if err != nil {
+			telemetry.Log().WarnContext(ctx, "sync run failed", "account", id, "provider", acct.Provider, "trigger", trig.String(), "outcome", outcome)
+		} else {
+			telemetry.Log().DebugContext(ctx, "sync run ok", "account", id, "provider", acct.Provider, "trigger", trig.String(),
+				"added", total.added, "changed", total.changed, "removed", total.removed)
+		}
 		m.logRun(ctx, id, "", start, trig, total, err)
 		if err != nil {
 			m.emit(id, "failed")
@@ -438,10 +497,27 @@ func (m *Manager) syncAccount(ctx context.Context, id string, trig Trigger) (ret
 		return m.fail(ctx, acct, firstErr)
 	}
 	if err := m.Accounts.MarkOK(ctx, id); err != nil {
+		telemetry.RecordError(ctx, "sync", err, telemetry.Operation("mark_ok"))
 		return 0, err
 	}
+	m.clearBackoff(id)
 	m.setNext(ctx, id, m.now().Add(m.cadenceFor(acct.Provider)))
 	return 0, nil
+}
+
+func (m *Manager) setBackoff(id string, d time.Duration) {
+	m.mu.Lock()
+	if m.backoffs == nil {
+		m.backoffs = map[string]time.Duration{}
+	}
+	m.backoffs[id] = d
+	m.mu.Unlock()
+}
+
+func (m *Manager) clearBackoff(id string) {
+	m.mu.Lock()
+	delete(m.backoffs, id)
+	m.mu.Unlock()
 }
 
 func (m *Manager) emit(accountID, state string) {
@@ -469,11 +545,15 @@ func (m *Manager) PruneRuns(ctx context.Context) (int64, error) {
 
 func (m *Manager) runPruner(ctx context.Context, every time.Duration) {
 	for {
-		if n, err := m.PruneRuns(ctx); err != nil && ctx.Err() == nil {
-			m.log().Error("prune sync_runs", "err", err)
+		pctx, span := telemetry.StartSpan(ctx, "sync.prune_runs")
+		if n, err := m.PruneRuns(pctx); err != nil && ctx.Err() == nil {
+			telemetry.RecordError(pctx, "sync", err, telemetry.Operation("prune_runs"))
 		} else if n > 0 {
-			m.log().Info("pruned sync_runs", "rows", n)
+			telemetry.Add(pctx, "sync_runs.pruned", n)
+			span.SetAttributes(attribute.Int64("calendar.rows", n))
+			telemetry.Log().InfoContext(pctx, "pruned sync_runs", "rows", n)
 		}
+		span.End()
 		select {
 		case <-ctx.Done():
 			return
@@ -483,34 +563,57 @@ func (m *Manager) runPruner(ctx context.Context, every time.Duration) {
 }
 
 func (m *Manager) setNext(ctx context.Context, id string, t time.Time) {
-	_ = m.DB.Write(context.WithoutCancel(ctx), func(tx *db.Tx) error {
+	err := m.DB.Write(context.WithoutCancel(ctx), func(tx *db.Tx) error {
 		_, err := tx.ExecContext(ctx, `UPDATE accounts SET next_sync_at=? WHERE id=?`, t.Unix(), id)
 		return err
 	})
+	if err != nil {
+		telemetry.RecordError(ctx, "sync", err, telemetry.Operation("set_next"))
+	}
 }
 
 // fail applies the §5.4 state machine for a failed pass and returns the retry delay.
 func (m *Manager) fail(ctx context.Context, a *domain.Account, cause error) (time.Duration, error) {
 	wctx := context.WithoutCancel(ctx)
 	detail := shorten(cause.Error())
+	span := trace.SpanFromContext(ctx)
 	if errors.Is(cause, provider.ErrNeedsReauth) {
-		m.log().Warn("account needs reauth", "account", a.ID)
+		telemetry.RecordErrorKind(ctx, "sync", telemetry.KindReauth, cause, telemetry.Operation("sync"))
+		span.AddEvent("account.needs_reauth", trace.WithAttributes(telemetry.AccountID(a.ID), telemetry.Provider(a.Provider)))
+		telemetry.Log().WarnContext(ctx, "account needs reauth", "account", a.ID, "provider", a.Provider)
 		if err := m.Accounts.MarkNeedsReauth(wctx, a.ID, "Google sign-in expired or was revoked"); err != nil {
-			m.log().Error("mark needs_reauth", "err", err)
+			telemetry.RecordError(ctx, "sync", err, telemetry.Operation("mark_needs_reauth"))
 		}
+		m.clearBackoff(a.ID)
 		return 0, cause
 	}
 	var fails int
-	_ = m.DB.R.QueryRowContext(wctx, `SELECT fail_count FROM accounts WHERE id=?`, a.ID).Scan(&fails)
+	if err := m.DB.R.QueryRowContext(wctx, `SELECT fail_count FROM accounts WHERE id=?`, a.ID).Scan(&fails); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		telemetry.RecordError(ctx, "sync", err, telemetry.Operation("read_fail_count"))
+	}
 	fails++
 	var rl provider.ErrRateLimited
 	retry := m.backoff(fails)
 	if errors.As(cause, &rl) && rl.RetryAfter > retry {
 		retry = rl.RetryAfter
 	}
+	if errors.As(cause, &rl) {
+		// an expected condition: counted as a run outcome, not recorded as an error
+		span.AddEvent("sync.rate_limited", trace.WithAttributes(attribute.Int64("calendar.retry_after_s", int64(rl.RetryAfter.Seconds()))))
+	} else if ctx.Err() == nil {
+		var ue *ics.UserError // a feed that stopped answering is a provider problem, not a validation one
+		if errors.As(cause, &ue) {
+			telemetry.RecordErrorKind(ctx, "sync", telemetry.KindProvider, cause, telemetry.Operation("sync"), attribute.Int("calendar.sync.fails", fails))
+		} else {
+			telemetry.RecordError(ctx, "sync", cause, telemetry.Operation("sync"), attribute.Int("calendar.sync.fails", fails))
+		}
+	}
 	var err error
 	if a.Status == accounts.StatusConnecting || fails >= errorThreshold {
 		err = m.Accounts.MarkError(wctx, a.ID, detail) // increments fail_count, status=error
+		if err == nil {
+			span.AddEvent("account.error", trace.WithAttributes(telemetry.AccountID(a.ID), attribute.Int("calendar.sync.fails", fails)))
+		}
 	} else {
 		err = m.DB.Write(wctx, func(tx *db.Tx) error {
 			_, e := tx.ExecContext(wctx, `UPDATE accounts SET fail_count=fail_count+1, last_sync_at=?, status_detail=? WHERE id=?`, m.now().Unix(), detail, a.ID)
@@ -518,10 +621,12 @@ func (m *Manager) fail(ctx context.Context, a *domain.Account, cause error) (tim
 		})
 	}
 	if err != nil {
-		m.log().Error("record sync failure", "err", err)
+		telemetry.RecordError(ctx, "sync", err, telemetry.Operation("record_failure"))
 	}
 	m.setNext(wctx, a.ID, m.now().Add(retry))
-	m.log().Warn("sync failed", "account", a.ID, "fails", fails, "retry_in", retry, "err", cause)
+	m.setBackoff(a.ID, retry)
+	telemetry.Inc(ctx, "sync.backoff", telemetry.Provider(a.Provider))
+	telemetry.Log().WarnContext(ctx, "sync failed", "account", a.ID, "provider", a.Provider, "fails", fails, "retry_in", retry.String(), "err", telemetry.Sanitize(cause.Error()))
 	return retry, cause
 }
 
@@ -609,10 +714,22 @@ func (m *Manager) cursor(ctx context.Context, calID string) (string, error) {
 
 // syncCalendar pulls pages until done. The cursor is committed with the last page's data.
 func (m *Manager) syncCalendar(ctx context.Context, prov provider.Provider, acct domain.Account, cal domain.Calendar) (total stats, err error) {
+	ctx, span := telemetry.StartSpan(ctx, "sync.calendar", telemetry.AccountID(acct.ID), telemetry.Provider(acct.Provider))
+	pname := telemetry.Provider(acct.Provider)
+	pages := 0
+	defer func() {
+		span.SetAttributes(attribute.Int("calendar.sync.pages", pages))
+		if err != nil {
+			span.SetStatus(codes.Error, telemetry.Kind(err))
+		}
+		span.End()
+	}()
 	cursor, err := m.cursor(ctx, cal.ID)
 	if err != nil {
+		telemetry.RecordError(ctx, "sync", err, telemetry.Operation("cursor"))
 		return total, err
 	}
+	span.SetAttributes(attribute.Bool("calendar.sync.full", cursor == ""))
 	var seen map[string]struct{}
 	if cursor == "" {
 		seen = map[string]struct{}{}
@@ -624,6 +741,8 @@ func (m *Manager) syncCalendar(ctx context.Context, prov provider.Provider, acct
 		lock.Lock()
 		batch, serr := prov.Sync(ctx, acct, cal, provider.SyncRequest{Cursor: cursor, PageToken: page})
 		if serr == nil {
+			pages++
+			telemetry.Inc(ctx, "sync.pages", pname)
 			if batch.Replace && seen == nil {
 				seen = map[string]struct{}{}
 			}
@@ -644,6 +763,7 @@ func (m *Manager) syncCalendar(ctx context.Context, prov provider.Provider, acct
 				continue
 			}
 			lock.Unlock()
+			telemetry.RecordError(ctx, "sync", serr, telemetry.Operation("apply"))
 			return total, serr
 		}
 		lock.Unlock()
@@ -651,7 +771,11 @@ func (m *Manager) syncCalendar(ctx context.Context, prov provider.Provider, acct
 		switch {
 		case errors.Is(serr, provider.ErrCursorExpired) && cursor != "" && resyncs < maxFullResyncs:
 			resyncs++
+			telemetry.Inc(ctx, "sync.cursor_resets", pname, telemetry.Attr("reason", "410"))
+			span.AddEvent("sync.cursor_reset", trace.WithAttributes(attribute.String("calendar.reason", "410")))
+			telemetry.Log().InfoContext(ctx, "sync cursor expired; full resync", "account", acct.ID, "provider", acct.Provider)
 			if _, e := m.DB.W.ExecContext(ctx, `UPDATE calendars SET sync_cursor=NULL WHERE id=?`, cal.ID); e != nil {
+				telemetry.RecordError(ctx, "sync", e, telemetry.Operation("reset_cursor"))
 				return total, e
 			}
 			cursor, page, seen = "", "", map[string]struct{}{}
@@ -661,10 +785,12 @@ func (m *Manager) syncCalendar(ctx context.Context, prov provider.Provider, acct
 			if wait <= 0 {
 				wait = 30 * time.Second
 			}
+			span.AddEvent("sync.rate_limit_wait", trace.WithAttributes(attribute.Int64("calendar.wait_s", int64(wait.Seconds()))))
 			if e := m.sleep(ctx, wait); e != nil {
 				return total, e
 			}
 		default:
+			// needs_reauth and rate limits are recorded by fail(); everything else is a provider failure
 			return total, serr
 		}
 	}

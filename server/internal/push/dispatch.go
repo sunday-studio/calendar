@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"calendar/server/internal/db"
+	"calendar/server/internal/telemetry"
 )
 
 const (
@@ -81,9 +82,7 @@ func (d *Dispatcher) AccountStatus(id, status string) {
 // Run processes batches until ctx ends.
 func (d *Dispatcher) Run(ctx context.Context) {
 	d.init()
-	if err := d.Process(ctx); err != nil && ctx.Err() == nil { // sets the cursor and baseline on first start
-		d.log().Error("push dispatch", "err", err)
-	}
+	d.safeProcess(ctx) // sets the cursor and baseline on first start
 	deb := d.Debounce
 	if deb <= 0 {
 		deb = 2 * time.Second
@@ -99,17 +98,27 @@ func (d *Dispatcher) Run(ctx context.Context) {
 			return
 		case <-time.After(deb):
 		}
-		if err := d.Process(ctx); err != nil && ctx.Err() == nil {
-			d.log().Error("push dispatch", "err", err)
-		}
+		d.safeProcess(ctx)
 	}
+}
+
+// safeProcess runs one batch; a failure is recorded and the loop carries on (the cursor was not advanced,
+// so the next batch retries). A panic is recovered, recorded and counted instead of ending the dispatcher.
+func (d *Dispatcher) safeProcess(ctx context.Context) {
+	telemetry.Safe(ctx, "push.dispatch", func() {
+		ctx, span := telemetry.StartSpan(ctx, "push.process")
+		defer span.End()
+		if err := d.Process(ctx); err != nil && ctx.Err() == nil {
+			telemetry.RecordError(ctx, "push", err, telemetry.Operation("process"))
+		}
+	})
 }
 
 // ---- payloads ----
 
 func silentMsg(rev int64) Message {
 	b, _ := json.Marshal(map[string]any{"aps": map[string]any{"content-available": 1}, "k": "sync", "rev": rev})
-	return Message{Type: "background", Priority: 5, CollapseID: "sync", Body: b}
+	return Message{Kind: "sync", Type: "background", Priority: 5, CollapseID: "sync", Body: b}
 }
 
 // alertMsg is a generic alert; the notification service extension fetches the real text from the hub.
@@ -126,7 +135,7 @@ func alertMsg(kind string, extra map[string]any, thread, collapse string) Messag
 		p[k] = v
 	}
 	b, _ := json.Marshal(p)
-	return Message{Type: "alert", Priority: 10, CollapseID: collapse, Body: b}
+	return Message{Kind: kind, Type: "alert", Priority: 10, CollapseID: collapse, Body: b}
 }
 
 // ---- classification ----
@@ -251,16 +260,7 @@ func (d *Dispatcher) deliver(ctx context.Context, m Message) (sent int, err erro
 		return 0, err
 	}
 	for _, e := range eps {
-		serr := d.Sender.Send(ctx, e.Target, m)
-		switch {
-		case serr == nil:
-			sent++
-		case errors.Is(serr, ErrUnregistered):
-			d.log().Info("push: dropping dead device token", "token_id", e.tokenID)
-			_, _ = d.DB.W.ExecContext(ctx, `DELETE FROM push_endpoints WHERE token_id=? AND apns_token=?`, e.tokenID, e.Token)
-		default:
-			d.log().Warn("push: send failed", "err", serr)
-		}
+		sent += d.sendOne(ctx, e, m)
 	}
 	return sent, nil
 }

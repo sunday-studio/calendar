@@ -11,8 +11,10 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
+	"go.opentelemetry.io/otel/trace"
 
 	"calendar/server/internal/db"
+	"calendar/server/internal/telemetry"
 )
 
 // ConfirmTTL is how long a draft can wait for a human.
@@ -82,6 +84,10 @@ func (h *Hub) Mint(ctx context.Context, tokenID, kind string, summary, payload a
 			hashToken(token), c.ID, kind, tokenID, string(sj), string(pj), now.Unix(), c.ExpiresAt.Unix())
 		return err
 	})
+	if err == nil {
+		telemetry.Inc(ctx, "mcp.confirmations", telemetry.Attr("state", "minted"))
+		trace.SpanFromContext(ctx).AddEvent("mcp.confirmation_minted", trace.WithAttributes(telemetry.Attr("kind", kind)))
+	}
 	return
 }
 
@@ -96,6 +102,7 @@ func (h *Hub) load(ctx context.Context, token string) (Confirmation, *ConfError)
 		return c, &ConfError{CodeInvalid, "unknown confirm_token"}
 	}
 	if err != nil {
+		telemetry.RecordError(ctx, "mcp", err, telemetry.Operation("confirm_load"))
 		return c, &ConfError{"internal", "confirmation lookup failed"}
 	}
 	c.Summary, c.Payload = json.RawMessage(sum), json.RawMessage(pay)
@@ -128,6 +135,7 @@ func (h *Hub) Approve(ctx context.Context, token, approverTokenID string) (Confi
 	}
 	switch c.Status {
 	case "expired":
+		telemetry.Inc(ctx, "mcp.confirmations", telemetry.Attr("state", "expired"))
 		return c, &ConfError{CodeExpired, "this confirmation has expired; ask the agent to draft again"}
 	case "used":
 		return c, &ConfError{CodeUsed, "this confirmation was already used"}
@@ -135,6 +143,7 @@ func (h *Hub) Approve(ctx context.Context, token, approverTokenID string) (Confi
 		return c, nil
 	}
 	if c.TokenID == approverTokenID {
+		telemetry.Inc(ctx, "mcp.confirmations", telemetry.Attr("state", "denied"))
 		return c, &ConfError{CodeInvalid, "a draft cannot be approved by the token that made it"}
 	}
 	now := h.now()
@@ -143,8 +152,11 @@ func (h *Hub) Approve(ctx context.Context, token, approverTokenID string) (Confi
 		return err
 	})
 	if err != nil {
+		telemetry.RecordError(ctx, "mcp", err, telemetry.Operation("approve"))
 		return c, &ConfError{"internal", "could not record approval"}
 	}
+	telemetry.Inc(ctx, "mcp.confirmations", telemetry.Attr("state", "approved"))
+	telemetry.Log().InfoContext(ctx, "mcp confirmation approved", "kind", c.Kind)
 	return h.load(ctx, token)
 }
 
@@ -159,10 +171,12 @@ func (h *Hub) consume(ctx context.Context, token, kind, tokenID string) (Confirm
 		return c, ce
 	}
 	if c.Kind != kind || c.TokenID != tokenID {
+		telemetry.Inc(ctx, "mcp.confirmations", telemetry.Attr("state", "denied"))
 		return c, &ConfError{CodeInvalid, "confirm_token does not belong to this tool or caller"}
 	}
 	switch c.Status {
 	case "expired":
+		telemetry.Inc(ctx, "mcp.confirmations", telemetry.Attr("state", "expired"))
 		return c, &ConfError{CodeExpired, "confirm_token expired; draft again and ask the user to approve"}
 	case "used":
 		return c, &ConfError{CodeUsed, "confirm_token was already used"}
@@ -180,6 +194,7 @@ func (h *Hub) consume(ctx context.Context, token, kind, tokenID string) (Confirm
 		return err
 	})
 	if err != nil {
+		telemetry.RecordError(ctx, "mcp", err, telemetry.Operation("spend"))
 		return c, &ConfError{"internal", "could not spend confirmation"}
 	}
 	if n == 0 { // lost a race with another call
@@ -189,10 +204,12 @@ func (h *Hub) consume(ctx context.Context, token, kind, tokenID string) (Confirm
 }
 
 func (h *Hub) setOutcome(ctx context.Context, id, outcome string) {
-	_ = h.DB.Write(ctx, func(tx *db.Tx) error {
+	if err := h.DB.Write(context.WithoutCancel(ctx), func(tx *db.Tx) error {
 		_, err := tx.ExecContext(ctx, `UPDATE mcp_confirmations SET outcome=? WHERE id=?`, outcome, id)
 		return err
-	})
+	}); err != nil {
+		telemetry.RecordError(ctx, "mcp", err, telemetry.Operation("set_outcome"))
+	}
 }
 
 // Stats feeds /v1/status.
@@ -237,8 +254,8 @@ func (h *Hub) audit(ctx context.Context, tokenID, tool string, ok bool, code str
 		_, err := tx.ExecContext(ctx, `DELETE FROM mcp_calls WHERE ts < ?`, h.now().Add(-90*24*time.Hour).Unix())
 		return err
 	})
-	if err != nil && h.Log != nil {
-		h.Log.Error("mcp audit", "err", err)
+	if err != nil {
+		telemetry.RecordError(ctx, "mcp", err, telemetry.Operation("audit"))
 	}
 }
 

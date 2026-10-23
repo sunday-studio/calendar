@@ -8,7 +8,12 @@ import (
 	"log/slog"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+
 	"calendar/server/internal/db"
+	"calendar/server/internal/telemetry"
 	"calendar/server/internal/tz"
 )
 
@@ -107,7 +112,16 @@ func (m *Materialiser) window(loc *time.Location) Window {
 
 // Rebuild rebuilds occurrences for the given events. Exceptions map to their series; a series
 // is rebuilt whole. Idempotent: delete + insert within tx.
-func (m *Materialiser) Rebuild(ctx context.Context, tx *db.Tx, eventIDs []string) error {
+func (m *Materialiser) Rebuild(ctx context.Context, tx *db.Tx, eventIDs []string) (rerr error) {
+	ctx, span := telemetry.StartSpan(ctx, "recur.rebuild", attribute.Int("calendar.events", len(eventIDs)))
+	began := time.Now()
+	defer func() {
+		telemetry.Record(ctx, "recur.rebuild.duration", time.Since(began).Seconds())
+		if rerr != nil {
+			span.SetStatus(codes.Error, telemetry.Kind(rerr)) // the caller records the failure once
+		}
+		span.End()
+	}()
 	loc := m.userTZ(ctx, tx)
 	win := m.window(loc)
 	done := map[string]bool{}
@@ -222,7 +236,7 @@ func (m *Materialiser) rebuildSeries(ctx context.Context, tx *db.Tx, e evRow, lo
 	}
 	occs, warns := Expand(s, win, 0)
 	for _, w := range warns {
-		m.log().Warn("recurrence", "event", e.id, "msg", w)
+		m.log().WarnContext(ctx, "recurrence", "event", e.id, "msg", w)
 	}
 
 	// exceptions
@@ -300,8 +314,12 @@ func (m *Materialiser) rebuildSeries(ctx context.Context, tx *db.Tx, e evRow, lo
 	if len(rowsOut) > max {
 		sortByStart(rowsOut, func(r outRow) int64 { return r.s })
 		rowsOut = rowsOut[:max]
-		m.log().Warn("recurrence: series truncated", "event", e.id, "max", max)
+		m.log().WarnContext(ctx, "recurrence: series truncated", "event", e.id, "max", max)
+		telemetry.Inc(ctx, "recur.cap_hits")
+		trace.SpanFromContext(ctx).AddEvent("recur.cap_hit", trace.WithAttributes(attribute.Int("calendar.max", max)))
 	}
+	telemetry.Inc(ctx, "recur.rebuilds")
+	telemetry.Record(ctx, "recur.occurrences", float64(len(rowsOut)))
 	for _, r := range rowsOut {
 		if err := insertOcc(ctx, tx, r.id, r.key, r.cal, r.allDay, r.s, r.e, r.sd, r.ed); err != nil {
 			return err
@@ -346,6 +364,17 @@ func (m *Materialiser) ExtendWindow(ctx context.Context, d *db.DB) error {
 	return nil
 }
 
+func (m *Materialiser) extendOnce(ctx context.Context, d *db.DB) {
+	ctx, span := telemetry.StartSpan(ctx, "recur.extend_window")
+	defer span.End()
+	if err := m.ExtendWindow(ctx, d); err != nil && ctx.Err() == nil {
+		telemetry.RecordError(ctx, "recur", err, telemetry.Operation("extend_window"))
+		telemetry.Inc(ctx, "recur.extend_window.runs", telemetry.Outcome("error"))
+		return
+	}
+	telemetry.Inc(ctx, "recur.extend_window.runs", telemetry.Outcome("ok"))
+}
+
 // RunDaily extends the window now and then every interval (default 24h) until ctx ends.
 func (m *Materialiser) RunDaily(ctx context.Context, d *db.DB, interval time.Duration) {
 	if interval <= 0 {
@@ -354,9 +383,7 @@ func (m *Materialiser) RunDaily(ctx context.Context, d *db.DB, interval time.Dur
 	t := time.NewTicker(interval)
 	defer t.Stop()
 	for {
-		if err := m.ExtendWindow(ctx, d); err != nil && ctx.Err() == nil {
-			m.log().Error("extend window", "err", err)
-		}
+		m.extendOnce(ctx, d)
 		select {
 		case <-ctx.Done():
 			return

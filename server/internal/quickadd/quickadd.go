@@ -13,7 +13,10 @@ import (
 	"time"
 	"unicode/utf16"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"calendar/server/internal/events"
+	"calendar/server/internal/telemetry"
 	"calendar/server/internal/tz"
 )
 
@@ -232,7 +235,16 @@ func nearest(from time.Time, wd time.Weekday) time.Time {
 }
 
 // Parse implements Parser.
-func (rp *RuleParser) Parse(ctx context.Context, req Request) (Draft, error) {
+func (rp *RuleParser) Parse(ctx context.Context, req Request) (d Draft, err error) {
+	if !silent(ctx) {
+		var span trace.Span
+		ctx, span = telemetry.StartSpan(ctx, "quickadd.parse", telemetry.Attr("source", "rules"))
+		defer func() { RecordParse(ctx, d, err); span.End() }()
+	}
+	return rp.parse(ctx, req)
+}
+
+func (rp *RuleParser) parse(ctx context.Context, req Request) (Draft, error) {
 	text := strings.TrimSpace(req.Text)
 	if text == "" {
 		return Draft{}, &events.Error{Kind: events.KValidation, Field: "text", Msg: "text is required"}

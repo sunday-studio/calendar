@@ -413,9 +413,9 @@ func (s *Store) PutSettings(ctx context.Context, in SettingsInput) (Settings, er
 
 // ---- free/busy ----
 
-// FreeBusy returns merged busy intervals clipped to [from,to) from visible calendars:
+// freeBusy returns merged busy intervals clipped to [from,to) from visible calendars:
 // busy events only, excluding events the user declined.
-func (s *Store) FreeBusy(ctx context.Context, from, to time.Time) (FreeBusy, error) {
+func (s *Store) freeBusy(ctx context.Context, from, to time.Time) (FreeBusy, error) {
 	out := FreeBusy{From: from.UTC(), To: to.UTC(), Busy: []Interval{}}
 	f, t := from.Unix(), to.Unix()
 	rs, err := s.DB.R.QueryContext(ctx, `SELECT o.start_utc, o.end_utc FROM occurrences o

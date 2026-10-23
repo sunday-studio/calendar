@@ -226,9 +226,9 @@ func reasonFor(g gap) string {
 	return "Nothing else on"
 }
 
-// FreeTime finds gaps from the busy occurrences of visible calendars, inside working hours
+// freeTime finds gaps from the busy occurrences of visible calendars, inside working hours
 // unless told otherwise. It is deterministic; nothing here involves a language model.
-func (s *Store) FreeTime(ctx context.Context, q FreeTimeQuery) (FreeTime, error) {
+func (s *Store) freeTime(ctx context.Context, q FreeTimeQuery) (FreeTime, error) {
 	if err := validateFreeTime(q); err != nil {
 		return FreeTime{}, err
 	}

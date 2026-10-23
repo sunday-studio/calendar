@@ -3,11 +3,14 @@ package automate
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
+	"calendar/server/internal/agenda"
 	"calendar/server/internal/db"
+	"calendar/server/internal/telemetry"
 )
 
 const (
@@ -25,9 +28,13 @@ func (s *Service) Run(ctx context.Context, every time.Duration) {
 	tk := time.NewTicker(every)
 	defer tk.Stop()
 	for {
-		if err := s.Tick(ctx); err != nil && ctx.Err() == nil {
-			s.log().Error("automations tick", "err", err)
-		}
+		telemetry.Safe(ctx, "automate.tick", func() {
+			tctx, span := telemetry.StartSpan(ctx, "automation.tick")
+			defer span.End()
+			if err := s.Tick(tctx); err != nil && ctx.Err() == nil {
+				telemetry.RecordError(tctx, "automate", err, telemetry.Operation("tick"))
+			}
+		})
 		select {
 		case <-ctx.Done():
 			return
@@ -141,6 +148,9 @@ func (s *Service) newEvents(ctx context.Context) ([]newEvent, error) {
 func (s *Service) fireEvent(ctx context.Context, r row, trig, occID string, loc *time.Location) {
 	ev, err := s.Store.Event(ctx, occID)
 	if err != nil {
+		if !errors.Is(err, agenda.ErrNotFound) { // an event deleted since the trigger is expected
+			telemetry.RecordError(ctx, "automate", err, telemetry.Operation("load_event"))
+		}
 		return
 	}
 	p := s.payload(r, trig)
@@ -196,7 +206,8 @@ func (s *Service) fireStarts(ctx context.Context, r row, now time.Time, loc *tim
 func (s *Service) fireCron(ctx context.Context, r row, now time.Time, loc *time.Location) error {
 	c, err := ParseCron(r.trig.Expr)
 	if err != nil {
-		return nil // validated on save; skip a corrupt row
+		telemetry.RecordError(ctx, "automate", err, telemetry.Operation("parse_cron")) // validated on save: a corrupt row
+		return nil
 	}
 	lastS, ok := s.getMeta(ctx, cronKey(r.id))
 	last := now
@@ -223,6 +234,8 @@ func (s *Service) fireCron(ctx context.Context, r row, now time.Time, loc *time.
 	p := s.payload(r, "cron")
 	if sum, err := s.Store.DaySummary(ctx, ""); err == nil {
 		p.Summary = &sum
+	} else {
+		telemetry.RecordError(ctx, "automate", err, telemetry.Operation("day_summary"))
 	}
 	s.deliver(ctx, r, p, loc)
 	return nil

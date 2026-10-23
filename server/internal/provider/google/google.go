@@ -18,6 +18,7 @@ import (
 	"calendar/server/internal/domain"
 	"calendar/server/internal/provider"
 	"calendar/server/internal/provider/httpx"
+	"calendar/server/internal/telemetry"
 )
 
 const (
@@ -56,7 +57,7 @@ func New(cfg Config) *Provider {
 	}
 	rt := cfg.Transport
 	if rt == nil {
-		rt = &httpx.Transport{}
+		rt = &httpx.Transport{Provider: "google"}
 	}
 	return &Provider{cfg: cfg, rt: rt, cl: map[string]*cached{}}
 }
@@ -81,8 +82,8 @@ func (p *Provider) client(ctx context.Context, accountID string) (*http.Client, 
 		Endpoint: oauth2.Endpoint{TokenURL: p.cfg.TokenURL, AuthStyle: oauth2.AuthStyleInParams}}
 	hc := &http.Client{Transport: p.rt, Timeout: 60 * time.Second}
 	// Background ctx: the token source outlives this request.
-	bg := context.WithValue(context.Background(), oauth2.HTTPClient, hc)
-	ts := oauth2.ReuseTokenSource(nil, conf.TokenSource(bg, &oauth2.Token{RefreshToken: rt}))
+	bg := context.WithValue(telemetry.WithProvider(context.Background(), "google"), oauth2.HTTPClient, hc)
+	ts := oauth2.ReuseTokenSource(nil, meteredSource{src: conf.TokenSource(bg, &oauth2.Token{RefreshToken: rt}), ctx: context.Background()})
 	cl := &http.Client{Transport: &oauth2.Transport{Source: ts, Base: p.rt}, Timeout: 60 * time.Second}
 	p.cl[accountID] = &cached{refresh: rt, client: cl}
 	return cl, nil
@@ -153,6 +154,7 @@ func classify(resp *http.Response, body []byte) error {
 }
 
 func (p *Provider) get(ctx context.Context, accountID, path string, q url.Values, out any) error {
+	ctx = telemetry.WithProvider(ctx, "google")
 	for attempt := 0; ; attempt++ {
 		cl, err := p.client(ctx, accountID)
 		if err != nil {
@@ -166,12 +168,15 @@ func (p *Provider) get(ctx context.Context, accountID, path string, q url.Values
 		if err != nil {
 			return err
 		}
+		began := time.Now()
 		resp, err := cl.Do(req)
 		if err != nil {
+			observe(ctx, listOp(ctx, path), began, nil, nil, err)
 			return mapTransportErr(err)
 		}
 		body, rerr := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
 		resp.Body.Close()
+		observe(ctx, listOp(ctx, path), began, resp, body, rerr)
 		if rerr != nil {
 			return rerr
 		}

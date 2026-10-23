@@ -212,6 +212,11 @@ func doctorCmd(ctx context.Context, cfg *config.Config, out io.Writer) error {
 		}
 		add("backup directory", err, cfg.BackupDir+" is writable")
 	}
+	if detail, w := doctorTelemetry(ctx); w {
+		warn("telemetry", detail)
+	} else {
+		add("telemetry", nil, detail)
+	}
 	failed := 0
 	for _, c := range cs {
 		mark := "ok  "

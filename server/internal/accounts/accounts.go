@@ -11,13 +11,24 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
+	"go.opentelemetry.io/otel/trace"
 
 	"calendar/server/internal/db"
 	"calendar/server/internal/domain"
 	"calendar/server/internal/oauth"
 	"calendar/server/internal/provider/ics"
+	"calendar/server/internal/telemetry"
 	"calendar/server/internal/vault"
 )
+
+// lifecycle records an account lifecycle event (connected, reconnected, removed, needs_reauth, error) as
+// a span event on the active span, an info log with trace ids and calendar.account.events. It never
+// carries the e-mail address or display name.
+func lifecycle(ctx context.Context, event, id, prov string, kv ...any) {
+	trace.SpanFromContext(ctx).AddEvent("account."+event, trace.WithAttributes(telemetry.AccountID(id), telemetry.Provider(prov)))
+	telemetry.Inc(ctx, "account.events", telemetry.Provider(prov), telemetry.Attr("event", event))
+	telemetry.Log().InfoContext(ctx, "account "+event, append([]any{"account", id, "provider", prov}, kv...)...)
+}
 
 // Palette is the account colour order; new accounts get the first unused key.
 var Palette = []string{"cobalt", "rose", "ochre", "mauve", "verdigris", "slate", "moss", "clay"}
@@ -187,7 +198,9 @@ func (s *Service) Patch(ctx context.Context, id string, p Patch) (*domain.Accoun
 
 // Delete disconnects an account and drops everything cached for it.
 func (s *Service) Delete(ctx context.Context, id string) error {
-	return s.DB.Write(ctx, func(tx *db.Tx) error {
+	prov := ""
+	_ = s.DB.R.QueryRowContext(ctx, `SELECT provider FROM accounts WHERE id=?`, id).Scan(&prov)
+	err := s.DB.Write(ctx, func(tx *db.Tx) error {
 		// FK cascades remove calendars -> events -> attendees/occurrences/overrides.
 		res, err := tx.ExecContext(ctx, `DELETE FROM accounts WHERE id=?`, id)
 		if err != nil {
@@ -206,6 +219,13 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 		}
 		return tx.Change(ctx, "account", id, "delete")
 	})
+	switch {
+	case err == nil:
+		lifecycle(ctx, "removed", id, prov)
+	case !errors.Is(err, ErrNotFound):
+		telemetry.RecordError(ctx, "accounts", err, telemetry.Operation("delete"))
+	}
+	return err
 }
 
 // ---- connect flow ----
@@ -226,6 +246,7 @@ func (s *Service) Connect(ctx context.Context, provider, tokenID, reauthAccountI
 	verifier := oauth.NewVerifier()
 	state, err = s.Sessions.Create(ctx, provider, verifier, tokenID, reauthAccountID)
 	if err != nil {
+		telemetry.RecordError(ctx, "accounts", err, telemetry.Operation("connect"))
 		return "", "", err
 	}
 	return s.Google.AuthURL(state, verifier), state, nil
@@ -238,11 +259,16 @@ func errRedirect(code string) string { return redirect(url.Values{"error": {code
 // Callback completes sign-in and returns the calendar:// URL to 302 to. It never returns
 // an error: every failure becomes calendar://connected?error=CODE.
 func (s *Service) Callback(ctx context.Context, state, code, providerErr string) string {
+	ctx, span := telemetry.StartSpan(ctx, "accounts.oauth_callback", telemetry.Provider("google"))
+	defer span.End()
 	sess, err := s.Sessions.Consume(ctx, state)
 	if err != nil {
 		if errors.Is(err, oauth.ErrInvalidState) {
+			telemetry.Log().InfoContext(ctx, "oauth callback with an unknown or expired state")
+			telemetry.Inc(ctx, "account.events", telemetry.Provider("google"), telemetry.Attr("event", "invalid_state"))
 			return errRedirect(ErrCodeInvalidState)
 		}
+		telemetry.RecordError(ctx, "accounts", err, telemetry.Operation("oauth_session"))
 		return errRedirect(ErrCodeInternal)
 	}
 	if providerErr != "" {
@@ -250,13 +276,18 @@ func (s *Service) Callback(ctx context.Context, state, code, providerErr string)
 		if len(providerErr) > 40 {
 			providerErr = "denied"
 		}
+		// the user said no (or Google did): an expected outcome, not a hub error
+		telemetry.Log().InfoContext(ctx, "oauth sign-in declined", "reason", providerErr)
+		telemetry.Inc(ctx, "account.events", telemetry.Provider("google"), telemetry.Attr("event", "declined"))
 		return errRedirect(providerErr)
 	}
 	if s.Google == nil || code == "" {
+		telemetry.RecordError(ctx, "accounts", errors.New("oauth callback without a code or google configuration"), telemetry.Operation("oauth_exchange"))
 		return errRedirect(ErrCodeExchange)
 	}
 	ident, err := s.Google.Exchange(ctx, code, sess.Verifier)
 	if err != nil {
+		telemetry.RecordError(ctx, "accounts", err, telemetry.Operation("oauth_exchange"))
 		return errRedirect(ErrCodeExchange)
 	}
 	acc, code2 := s.upsert(ctx, sess, ident)
@@ -269,6 +300,7 @@ func (s *Service) Callback(ctx context.Context, state, code, providerErr string)
 // upsert returns (accountID, "") or ("", errorCode).
 func (s *Service) upsert(ctx context.Context, sess *oauth.Session, ident *oauth.Identity) (string, string) {
 	var resultID, errCode string
+	created := false
 	now := s.now().Unix()
 	err := s.DB.Write(ctx, func(tx *db.Tx) error {
 		var existingID, existingExt string
@@ -296,6 +328,7 @@ func (s *Service) upsert(ctx context.Context, sess *oauth.Session, ident *oauth.
 		}
 		id := existingID
 		isNew := id == ""
+		created = isNew
 		if isNew {
 			id = ulid.Make().String()
 		}
@@ -335,10 +368,20 @@ func (s *Service) upsert(ctx context.Context, sess *oauth.Session, ident *oauth.
 		return tx.Change(ctx, "account", id, "upsert")
 	})
 	if err != nil {
+		telemetry.RecordError(ctx, "accounts", err, telemetry.Operation("upsert"))
 		return "", ErrCodeInternal
 	}
 	if errCode != "" {
+		// identity mismatch, missing refresh token ...: the user can fix these, but a hub that keeps
+		// producing them is worth seeing
+		telemetry.Log().WarnContext(ctx, "account sign-in rejected", "code", errCode, "reauth", sess.ReauthAccountID != "")
+		telemetry.Inc(ctx, "account.events", telemetry.Provider("google"), telemetry.Attr("event", errCode))
 		return "", errCode
+	}
+	if created {
+		lifecycle(ctx, "connected", resultID, "google")
+	} else {
+		lifecycle(ctx, "reconnected", resultID, "google")
 	}
 	if s.OnStatus != nil {
 		s.OnStatus(resultID, StatusConnecting)
@@ -389,9 +432,10 @@ func nextColor(ctx context.Context, tx *db.Tx) (string, error) {
 
 func (s *Service) setStatus(ctx context.Context, id, status, detail string, extra string, args ...any) error {
 	changed := false
+	prov := ""
 	err := s.DB.Write(ctx, func(tx *db.Tx) error {
 		var cur string
-		if err := tx.QueryRowContext(ctx, `SELECT status FROM accounts WHERE id=?`, id).Scan(&cur); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT status, provider FROM accounts WHERE id=?`, id).Scan(&cur, &prov); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrNotFound
 			}
@@ -413,8 +457,16 @@ func (s *Service) setStatus(ctx context.Context, id, status, detail string, extr
 		}
 		return nil
 	})
-	if err == nil && changed && s.OnStatus != nil {
-		s.OnStatus(id, status)
+	if err == nil && changed {
+		switch status {
+		case StatusNeedsReauth:
+			lifecycle(ctx, "needs_reauth", id, prov, "reason", "provider_rejected_credentials")
+		case StatusError:
+			lifecycle(ctx, "error", id, prov, "reason", "repeated_sync_failures")
+		}
+		if s.OnStatus != nil {
+			s.OnStatus(id, status)
+		}
 	}
 	return err
 }

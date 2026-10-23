@@ -22,7 +22,10 @@ import (
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/hkdf"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	"calendar/server/internal/db"
+	"calendar/server/internal/telemetry"
 )
 
 const (
@@ -226,6 +229,28 @@ func List(dir string) ([]string, error) {
 // Create writes calendar-YYYYMMDD-HHMMSS.db[.enc] into Dir. The snapshot is taken with VACUUM INTO
 // (consistent while the hub runs), integrity-checked, then encrypted.
 func Create(ctx context.Context, o Options) (path string, size int64, err error) {
+	ctx, span := telemetry.StartSpan(ctx, "backup.run", attribute.Bool("calendar.backup.encrypted", o.Key != nil))
+	began := time.Now()
+	defer func() {
+		out := "ok"
+		if err != nil {
+			out = "failed"
+			telemetry.RecordError(ctx, "backup", err, telemetry.Operation("create"))
+		} else {
+			lastOKAt.Store(time.Now().Unix())
+			lastSize.Store(size)
+			span.SetAttributes(attribute.Int64("calendar.backup.bytes", size))
+			telemetry.Log().InfoContext(ctx, "backup written", "file", filepath.Base(path), "bytes", size)
+		}
+		telemetry.Inc(ctx, "backup.runs", telemetry.Outcome(out))
+		telemetry.Record(ctx, "backup.duration", time.Since(began).Seconds())
+		span.SetAttributes(telemetry.Outcome(out))
+		span.End()
+	}()
+	return create(ctx, o)
+}
+
+func create(ctx context.Context, o Options) (path string, size int64, err error) {
 	if o.Dir == "" {
 		return "", 0, errors.New("backup: no directory")
 	}
@@ -292,14 +317,23 @@ func Create(ctx context.Context, o Options) (path string, size int64, err error)
 			os.Remove(filepath.Join(o.Dir, n))
 		}
 	}
-	_, _ = o.DB.W.ExecContext(ctx, `INSERT INTO meta(key,value) VALUES ('last_backup_at',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, fmt.Sprint(o.now().Unix()))
+	if _, merr := o.DB.W.ExecContext(ctx, `INSERT INTO meta(key,value) VALUES ('last_backup_at',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, fmt.Sprint(o.now().Unix())); merr != nil {
+		telemetry.RecordError(ctx, "backup", merr, telemetry.Operation("record_last_backup"))
+	}
 	return final, size, nil
 }
 
 // Restore decrypts (if needed), verifies and installs a backup as the database at dbPath.
 // An existing database is only replaced with force, and then kept next to it as
 // <db>.pre-restore-<time>. The hub must be stopped (an in-use database is refused).
-func Restore(ctx context.Context, from, dbPath string, key []byte, force bool, now time.Time) error {
+func Restore(ctx context.Context, from, dbPath string, key []byte, force bool, now time.Time) (err error) {
+	ctx, span := telemetry.StartSpan(ctx, "backup.restore")
+	defer func() {
+		if err != nil {
+			telemetry.RecordError(ctx, "backup", err, telemetry.Operation("restore"))
+		}
+		span.End()
+	}()
 	if _, err := os.Stat(dbPath); err == nil && !force {
 		return fmt.Errorf("backup: %s exists; pass --force to replace it (it is kept as a .pre-restore copy)", dbPath)
 	}
@@ -404,11 +438,13 @@ func Schedule(ctx context.Context, o Options, hour int, loc *time.Location) {
 			return
 		case <-time.After(next.Sub(now)):
 		}
-		path, size, err := Create(ctx, o)
-		if err != nil {
-			log.Error("nightly backup failed", "err", err)
-			continue
-		}
-		log.Info("nightly backup", "file", filepath.Base(path), "bytes", size)
+		telemetry.Safe(ctx, "backup.schedule", func() {
+			path, size, err := Create(ctx, o)
+			if err != nil {
+				log.ErrorContext(ctx, "nightly backup failed", "err", telemetry.Sanitize(err.Error()))
+				return
+			}
+			log.InfoContext(ctx, "nightly backup", "file", filepath.Base(path), "bytes", size)
+		})
 	}
 }

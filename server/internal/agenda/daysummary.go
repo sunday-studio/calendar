@@ -35,8 +35,8 @@ func plural(n int, one, many string) string {
 	return fmt.Sprintf("%d %s", n, many)
 }
 
-// DaySummary summarises the local day `date` (YYYY-MM-DD, user zone; "" = today).
-func (s *Store) DaySummary(ctx context.Context, date string) (DaySummary, error) {
+// daySummary summarises the local day `date` (YYYY-MM-DD, user zone; "" = today).
+func (s *Store) daySummary(ctx context.Context, date string) (DaySummary, error) {
 	st, err := s.Settings(ctx)
 	if err != nil {
 		return DaySummary{}, err
@@ -50,7 +50,7 @@ func (s *Store) DaySummary(ctx context.Context, date string) (DaySummary, error)
 		return DaySummary{}, &ValidationError{"date", "must be YYYY-MM-DD"}
 	}
 	from, to := day.UTC(), day.AddDate(0, 0, 1).UTC()
-	ag, err := s.Agenda(ctx, from, to, nil)
+	ag, err := s.agenda(ctx, from, to, nil)
 	if err != nil {
 		return DaySummary{}, err
 	}

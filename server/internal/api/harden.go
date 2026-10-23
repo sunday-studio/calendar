@@ -13,6 +13,7 @@ import (
 	"github.com/oklog/ulid/v2"
 
 	"calendar/server/internal/authn"
+	"calendar/server/internal/hubmcp"
 )
 
 const (
@@ -275,6 +276,7 @@ func (s *Server) limitMCP(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := authn.FromContext(r.Context())
 		if wait, ok := s.mcpRate.allow(p.TokenID, s.Limits.mcpRate(), time.Now()); !ok {
+			hubmcp.RecordRateLimited(r.Context())
 			w.Header().Set("Retry-After", fmt.Sprint(int(wait.Seconds())+1))
 			WriteError(w, http.StatusTooManyRequests, CodeRateLimited, "too many MCP calls; slow down", "")
 			return

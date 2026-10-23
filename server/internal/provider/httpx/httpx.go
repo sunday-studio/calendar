@@ -8,7 +8,13 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+
+	"calendar/server/internal/telemetry"
 )
 
 type Transport struct {
@@ -19,6 +25,17 @@ type Transport struct {
 	Now        func() time.Time
 	Sleep      func(ctx context.Context, d time.Duration) error
 	Jitter     func() float64 // [0,1); default rand.Float64
+	// Provider labels telemetry (calendar.provider). Empty = inferred from the request host or context.
+	Provider string
+
+	telOnce sync.Once
+	traced  http.RoundTripper
+}
+
+// retried counts one retry. reason is low cardinality: 429, 5xx or network.
+func (t *Transport) retried(req *http.Request, reason string) {
+	telemetry.Counter("provider.retries", "Outbound provider calls retried by the transport, by provider and reason", "{retry}").Add(req.Context(), 1, metric.WithAttributes(
+		attribute.String("calendar.provider", telemetry.ProviderFor(req, t.Provider)), attribute.String("calendar.retry.reason", reason)))
 }
 
 func (t *Transport) defaults() (base http.RoundTripper, max int, bd, md time.Duration) {
@@ -72,6 +89,9 @@ func retryable(status int) bool {
 
 func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	base, maxRetries, baseDelay, maxDelay := t.defaults()
+	// one client span per attempt, templated URL, no ids/query/tokens; a no-op until telemetry is enabled
+	t.telOnce.Do(func() { t.traced = telemetry.WrapClient(base, t.Provider) })
+	base = t.traced
 	now, slp, jit := t.Now, t.Sleep, t.Jitter
 	if now == nil {
 		now = time.Now
@@ -100,10 +120,16 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 			if !replayable || req.Context().Err() != nil || attempt >= maxRetries {
 				return nil, err
 			}
+			t.retried(req, "network")
 			wait = backoff(attempt, baseDelay, maxDelay, jit())
 		case retryable(resp.StatusCode):
 			if !replayable || attempt >= maxRetries {
 				return resp, nil
+			}
+			if resp.StatusCode == http.StatusTooManyRequests {
+				t.retried(req, "429")
+			} else {
+				t.retried(req, "5xx")
 			}
 			if ra, ok := ParseRetryAfter(resp.Header.Get("Retry-After"), now()); ok {
 				if ra > maxDelay {

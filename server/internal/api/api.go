@@ -21,6 +21,7 @@ import (
 	"calendar/server/internal/hubmcp"
 	"calendar/server/internal/quickadd"
 	"calendar/server/internal/stream"
+	"calendar/server/internal/telemetry"
 )
 
 const APIVersion = 1
@@ -83,7 +84,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusNotFound, "not_found", "no such route", "")
 	})
-	return s.recoverer(s.logging(s.harden(mux)))
+	return telemetry.HTTP(s.recoverer(s.logging(s.harden(telemetry.Route(mux)))))
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
@@ -147,6 +148,7 @@ func (s *Server) require(need authn.Scope, next http.Handler) http.Handler {
 		case errors.Is(err, authn.ErrUnauthorized):
 			key, now := clientKey(r), time.Now()
 			if wait, blocked := s.limiter.blocked(key, now); blocked {
+				authn.RecordThrottled(r.Context())
 				w.Header().Set("Retry-After", fmt.Sprint(int(wait.Seconds())+1))
 				WriteError(w, http.StatusTooManyRequests, CodeRateLimited, "too many invalid tokens; slow down", "")
 				return
@@ -159,11 +161,13 @@ func (s *Server) require(need authn.Scope, next http.Handler) http.Handler {
 			WriteError(w, http.StatusUnauthorized, "unauthorized", "invalid or revoked token", "")
 			return
 		case err != nil:
-			s.Log.Error("auth lookup failed", "err", err)
+			s.Log.ErrorContext(r.Context(), "auth lookup failed", "err", err)
+			telemetry.RecordSpanError(r.Context(), "auth", err)
 			WriteError(w, http.StatusInternalServerError, "internal", "internal error", "")
 			return
 		}
 		if !p.Scope.Allows(need) {
+			authn.RecordScopeDenied(r.Context(), p)
 			WriteError(w, http.StatusForbidden, "forbidden", "token scope "+string(need)+" required", "")
 			return
 		}
@@ -196,8 +200,12 @@ func (s *Server) logging(next http.Handler) http.Handler {
 		next.ServeHTTP(sw, r)
 		// Authorization header is never logged; URL is redacted in case a secret is passed in it.
 		s.reqs.add(sw.status)
-		s.Log.Info("request", "id", w.Header().Get("X-Request-Id"), "method", r.Method, "path", redactQuery(r.URL.RequestURI()),
-			"status", sw.status, "ms", time.Since(start).Milliseconds())
+		args := []any{"id", w.Header().Get("X-Request-Id"), "method", r.Method, "path", redactQuery(r.URL.RequestURI()),
+			"status", sw.status, "ms", time.Since(start).Milliseconds()}
+		if telemetry.Enabled() { // route pattern for log/trace correlation; the raw path stays out of OTel (see telemetry.scrubHandler)
+			args = append(args, "route", telemetry.RouteFromContext(r.Context()))
+		}
+		s.Log.InfoContext(r.Context(), "request", args...)
 	})
 }
 
@@ -205,7 +213,9 @@ func (s *Server) recoverer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if v := recover(); v != nil {
-				s.Log.Error("panic", "value", Redact(toString(v)), "stack", string(debug.Stack()))
+				stack := debug.Stack()
+				telemetry.RecordPanic(r.Context(), "http", v, stack)
+				s.Log.ErrorContext(r.Context(), "panic", "value", Redact(toString(v)), "stack", string(stack))
 				WriteError(w, http.StatusInternalServerError, "internal", "internal error", "")
 			}
 		}()

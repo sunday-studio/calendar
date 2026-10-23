@@ -24,9 +24,12 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"calendar/server/internal/agenda"
 	"calendar/server/internal/db"
+	"calendar/server/internal/telemetry"
 	"calendar/server/internal/tz"
 	"calendar/server/internal/vault"
 )
@@ -98,6 +101,9 @@ type Service struct {
 	Now   func() time.Time
 	Sleep func(ctx context.Context, d time.Duration) error
 	Log   *slog.Logger
+
+	tcOnce gosync.Once
+	tc     *http.Client
 	// Retry waits between delivery attempts (default 2s, 10s).
 	Retry []time.Duration
 	// AllowPrivate is accepted for completeness: targets on the home network are the point of this feature.
@@ -209,6 +215,7 @@ func (s *Service) open(sealed, id string) string {
 	}
 	pt, err := s.Vault.Open(raw, []byte(id))
 	if err != nil {
+		telemetry.RecordErrorKind(context.Background(), "automate", telemetry.KindAuth, err, telemetry.Operation("open_secret"))
 		s.log().Error("automation secret cannot be opened", "id", id)
 		return ""
 	}
@@ -236,7 +243,8 @@ func (s *Service) rows(ctx context.Context, where string, args ...any) ([]row, e
 			return nil, err
 		}
 		if json.Unmarshal([]byte(t), &r.trig) != nil || json.Unmarshal([]byte(a), &r.act) != nil {
-			s.log().Warn("automation with unreadable definition skipped", "id", r.id)
+			telemetry.RecordErrorKind(ctx, "automate", telemetry.KindInternal, errors.New("automation with unreadable definition skipped"), telemetry.Operation("load"))
+			s.log().WarnContext(ctx, "automation with unreadable definition skipped", "id", r.id)
 			continue
 		}
 		out = append(out, r)
@@ -465,10 +473,17 @@ func sign(secret string, ts int64, body []byte) string {
 func Sign(secret string, ts int64, body []byte) string { return sign(secret, ts, body) }
 
 func (s *Service) client() *http.Client {
-	if s.HTTP != nil {
-		return s.HTTP
-	}
-	return &http.Client{Timeout: 10 * time.Second}
+	s.tcOnce.Do(func() {
+		c := s.HTTP
+		if c == nil {
+			c = &http.Client{Timeout: 10 * time.Second}
+		}
+		// client spans and http.client.* metrics; webhook paths can embed secrets so spans see host only
+		tc := *c
+		tc.Transport = telemetry.WrapClientRedacted(c.Transport, "webhook", "/webhook")
+		s.tc = &tc
+	})
+	return s.tc
 }
 
 func (s *Service) sleep(ctx context.Context, d time.Duration) error {
@@ -557,6 +572,9 @@ func (s *Service) send(ctx context.Context, r row, p Payload, loc *time.Location
 
 // deliver sends with up to three attempts and records the outcome.
 func (s *Service) deliver(ctx context.Context, r row, p Payload, loc *time.Location) Run {
+	ctx, span := telemetry.StartSpan(ctx, "automation.fire", telemetry.Attr("trigger", p.Trigger), telemetry.Attr("action", r.act.Type),
+		attribute.String("calendar.automation.id", safeID(r.id)), attribute.Bool("calendar.automation.test", p.Test))
+	defer span.End()
 	waits := s.Retry
 	if waits == nil {
 		waits = []time.Duration{2 * time.Second, 10 * time.Second}
@@ -565,10 +583,14 @@ func (s *Service) deliver(ctx context.Context, r row, p Payload, loc *time.Locat
 	var status int
 	var err error
 	for attempt := 0; ; attempt++ {
+		began := time.Now()
 		status, err = s.send(ctx, r, p, loc)
+		s.observeSend(ctx, r, began, status, err)
 		if err == nil || attempt >= len(waits) || ctx.Err() != nil || (status >= 400 && status < 500 && status != 429) {
 			break
 		}
+		telemetry.Inc(ctx, "automation.retries", telemetry.Attr("action", r.act.Type))
+		span.AddEvent("automation.retry", trace.WithAttributes(attribute.Int("calendar.attempt", attempt+1)))
 		if s.sleep(ctx, waits[attempt]) != nil {
 			break
 		}
@@ -583,20 +605,33 @@ func (s *Service) deliver(ctx context.Context, r row, p Payload, loc *time.Locat
 		if len(run.Detail) > 300 {
 			run.Detail = run.Detail[:300]
 		}
-		s.log().Warn("automation delivery failed", "id", r.id, "name", r.name, "err", err)
+		// RecordError scrubs the message and strips the request URL (webhook URLs can embed secrets)
+		serr := telemetry.SafeError(err)
+		telemetry.RecordError(ctx, "automate", serr, telemetry.Operation("deliver"), telemetry.Attr("action", r.act.Type),
+			telemetry.Attr("status_class", telemetry.StatusClass(status)))
+		telemetry.Inc(ctx, "automation.dead_letters", telemetry.Attr("action", r.act.Type))
+		s.log().WarnContext(ctx, "automation delivery failed", "id", r.id, "action", r.act.Type, "status", status, "err", telemetry.Sanitize(serr.Error()))
 	}
+	out := "ok"
+	if err != nil {
+		out = "failed"
+	}
+	telemetry.Inc(ctx, "automation.fires", telemetry.Attr("trigger", p.Trigger), telemetry.Attr("action", r.act.Type), telemetry.Outcome(out))
+	span.SetAttributes(telemetry.Outcome(out))
 	var stv any
 	if run.Status != nil {
 		stv = *run.Status
 	}
-	_ = s.DB.Write(context.WithoutCancel(ctx), func(tx *db.Tx) error {
+	if werr := s.DB.Write(context.WithoutCancel(ctx), func(tx *db.Tx) error {
 		if _, err := tx.Exec(`INSERT INTO automation_runs(automation_id,ts,trigger,ok,status,detail,ms) VALUES (?,?,?,?,?,?,?)`,
 			r.id, run.At.Unix(), run.Trigger, run.OK, stv, run.Detail, run.Ms); err != nil {
 			return err
 		}
 		_, err := tx.Exec(`DELETE FROM automation_runs WHERE automation_id=? AND id NOT IN (SELECT id FROM automation_runs WHERE automation_id=? ORDER BY id DESC LIMIT 100)`, r.id, r.id)
 		return err
-	})
+	}); werr != nil {
+		telemetry.RecordError(ctx, "automate", werr, telemetry.Operation("record_run"))
+	}
 	return run
 }
 

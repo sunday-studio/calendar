@@ -11,8 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"calendar/server/internal/db"
 	"github.com/oklog/ulid/v2"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
+	"calendar/server/internal/db"
+	"calendar/server/internal/telemetry"
 )
 
 const Prefix = "cal_"
@@ -87,12 +91,21 @@ func (s Store) Create(ctx context.Context, name, kind string, scope Scope) (id, 
 			id, name, kind, string(scope), Hash(secret), secret[:len(Prefix)+4], time.Now().Unix())
 		return err
 	})
-	return id, secret, err
+	if err != nil {
+		telemetry.RecordError(ctx, "authn", err, telemetry.Operation("create_token"))
+		return id, secret, err
+	}
+	// ids, kind and scope only: never the secret, its prefix or the user-chosen name
+	trace.SpanFromContext(ctx).AddEvent("auth.token_created", trace.WithAttributes(attribute.String("calendar.token.id", id), telemetry.Attr("kind", kind), telemetry.Attr("scope", string(scope))))
+	telemetry.Inc(ctx, "auth.tokens", telemetry.Attr("action", "created"), telemetry.Attr("token_kind", kind))
+	telemetry.Log().InfoContext(ctx, "api token created", "token_id", id, "kind", kind, "scope", string(scope))
+	return id, secret, nil
 }
 
 // Verify resolves a secret to a Principal and records last_used_at (at most once a minute).
 func (s Store) Verify(ctx context.Context, secret string) (*Principal, error) {
 	if !strings.HasPrefix(secret, Prefix) {
+		telemetry.Inc(ctx, "auth.requests", telemetry.Outcome("invalid"), telemetry.Attr("token_kind", "none"))
 		return nil, ErrUnauthorized
 	}
 	var p Principal
@@ -100,18 +113,32 @@ func (s Store) Verify(ctx context.Context, secret string) (*Principal, error) {
 	var last sql.NullInt64
 	err := s.DB.R.QueryRowContext(ctx, `SELECT id,name,kind,scope,last_used_at FROM tokens WHERE hash=? AND revoked_at IS NULL`, Hash(secret)).Scan(&p.TokenID, &p.Name, &p.Kind, &sc, &last)
 	if errors.Is(err, sql.ErrNoRows) {
+		// revoked, or never existed? (a revoked token still being presented is worth seeing)
+		var kind string
+		out := "invalid"
+		if s.DB.R.QueryRowContext(ctx, `SELECT kind FROM tokens WHERE hash=?`, Hash(secret)).Scan(&kind) == nil {
+			out = "revoked"
+		} else {
+			kind = "none"
+		}
+		telemetry.Inc(ctx, "auth.requests", telemetry.Outcome(out), telemetry.Attr("token_kind", kind))
+		trace.SpanFromContext(ctx).AddEvent("auth.rejected", trace.WithAttributes(telemetry.Outcome(out)))
 		return nil, ErrUnauthorized
 	}
 	if err != nil {
+		telemetry.RecordError(ctx, "authn", err, telemetry.Operation("verify"))
 		return nil, err
 	}
 	p.Scope = Scope(sc)
+	telemetry.Inc(ctx, "auth.requests", telemetry.Outcome("ok"), telemetry.Attr("token_kind", p.Kind))
 	now := time.Now().Unix()
 	if !last.Valid || now-last.Int64 >= 60 {
-		_ = s.DB.Write(ctx, func(tx *db.Tx) error {
+		if werr := s.DB.Write(ctx, func(tx *db.Tx) error {
 			_, err := tx.ExecContext(ctx, `UPDATE tokens SET last_used_at=? WHERE id=?`, now, p.TokenID)
 			return err
-		})
+		}); werr != nil {
+			telemetry.RecordError(ctx, "authn", werr, telemetry.Operation("touch_token"))
+		}
 	}
 	return &p, nil
 }
@@ -148,7 +175,7 @@ func (s Store) List(ctx context.Context) ([]TokenInfo, error) {
 var ErrNotFound = errors.New("token not found or already revoked")
 
 func (s Store) Revoke(ctx context.Context, id string) error {
-	return s.DB.Write(ctx, func(tx *db.Tx) error {
+	err := s.DB.Write(ctx, func(tx *db.Tx) error {
 		r, err := tx.ExecContext(ctx, `UPDATE tokens SET revoked_at=? WHERE id=? AND revoked_at IS NULL`, time.Now().Unix(), id)
 		if err != nil {
 			return err
@@ -160,7 +187,29 @@ func (s Store) Revoke(ctx context.Context, id string) error {
 		_, err = tx.ExecContext(ctx, `DELETE FROM push_endpoints WHERE token_id=?`, id)
 		return err
 	})
+	switch {
+	case err == nil:
+		trace.SpanFromContext(ctx).AddEvent("auth.token_revoked", trace.WithAttributes(attribute.String("calendar.token.id", id)))
+		telemetry.Inc(ctx, "auth.tokens", telemetry.Attr("action", "revoked"), telemetry.Attr("token_kind", "any"))
+		telemetry.Log().InfoContext(ctx, "api token revoked", "token_id", id)
+	case !errors.Is(err, ErrNotFound):
+		telemetry.RecordError(ctx, "authn", err, telemetry.Operation("revoke_token"))
+	}
+	return err
 }
+
+// RecordScopeDenied counts a request whose token was valid but lacked the scope the route needs.
+func RecordScopeDenied(ctx context.Context, p *Principal) {
+	kind := "none"
+	if p != nil {
+		kind = p.Kind
+	}
+	telemetry.Inc(ctx, "auth.requests", telemetry.Outcome("scope_denied"), telemetry.Attr("token_kind", kind))
+	trace.SpanFromContext(ctx).AddEvent("auth.scope_denied")
+}
+
+// RecordThrottled counts a request rejected by the invalid-token throttle.
+func RecordThrottled(ctx context.Context) { telemetry.Inc(ctx, "auth.throttled") }
 
 type ctxKey struct{}
 

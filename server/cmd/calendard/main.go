@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -128,12 +127,14 @@ func serve(ctx context.Context, cfg *config.Config) error {
 	if err != nil {
 		return err
 	}
+	// telemetry first, so the start-up migration run is a span with the number applied
+	log, stopTelemetry := startTelemetry(ctx, os.Stderr)
+	defer stopTelemetry()
 	d, err := db.Open(ctx, cfg.DBPath)
 	if err != nil {
 		return err
 	}
 	defer d.Close()
-	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	acc := &accounts.Service{DB: d, Vault: v, Sessions: oauth.Sessions{DB: d}}
 	var cf *oauth.ClientFile
 	switch {
@@ -216,6 +217,7 @@ func serve(ctx context.Context, cfg *config.Config) error {
 	if !cfg.MCPDisabled {
 		s.MCP = &hubmcp.Hub{DB: d, Store: store, Events: evSvc, Log: log, Version: version}
 	}
+	registerGauges(d, mgr, broker, cfg.BackupDir != "")
 	srv := &http.Server{Addr: cfg.Addr, Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 64 << 10}
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
@@ -231,7 +233,8 @@ func serve(ctx context.Context, cfg *config.Config) error {
 }
 
 func serveFixtures(ctx context.Context, cfg *config.Config, state, write string) error {
-	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	log, stopTelemetry := startTelemetry(ctx, os.Stderr)
+	defer stopTelemetry()
 	fs := &fixtures.Server{Data: fixtures.New(time.Now()), Name: "calendard-fixtures", Version: version, State: state, WriteOutcome: write}
 	srv := &http.Server{Addr: cfg.Addr, Handler: fs.Handler(), ReadHeaderTimeout: 10 * time.Second}
 	errc := make(chan error, 1)

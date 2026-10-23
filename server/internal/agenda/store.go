@@ -176,9 +176,9 @@ type AgendaResult struct {
 // Rev returns the current global revision.
 func (s *Store) Rev(ctx context.Context) (int64, error) { return s.DB.Rev(ctx) }
 
-// Agenda returns occurrences overlapping [from,to) on visible calendars, optionally limited
+// agenda returns occurrences overlapping [from,to) on visible calendars, optionally limited
 // to calendars. Order: by local day, all-day first, then start instant, title, id.
-func (s *Store) Agenda(ctx context.Context, from, to time.Time, calendars []string) (AgendaResult, error) {
+func (s *Store) agenda(ctx context.Context, from, to time.Time, calendars []string) (AgendaResult, error) {
 	tx, err := s.readTx(ctx)
 	if err != nil {
 		return AgendaResult{}, err
@@ -241,9 +241,9 @@ func placeholders(n int) string {
 
 // ---- event detail ----
 
-// Event loads one event. id is an eventId or an occurrence id (eventId:rkey); a bare eventId
+// event loads one event. id is an eventId or an occurrence id (eventId:rkey); a bare eventId
 // resolves to the occurrence nearest to now (ongoing/next, else the latest past one).
-func (s *Store) Event(ctx context.Context, id string) (Event, error) {
+func (s *Store) event(ctx context.Context, id string) (Event, error) {
 	tx, err := s.readTx(ctx)
 	if err != nil {
 		return Event{}, err
@@ -404,9 +404,9 @@ func MatchExpr(q string) string {
 	return strings.Join(words, " ")
 }
 
-// List returns events (as occurrences, ascending by start) for a window and/or a text query.
+// list returns events (as occurrences, ascending by start) for a window and/or a text query.
 // With q, each event appears once (its first occurrence inside the window).
-func (s *Store) List(ctx context.Context, lq ListQuery) (EventPage, error) {
+func (s *Store) list(ctx context.Context, lq ListQuery) (EventPage, error) {
 	page := EventPage{Items: []Event{}}
 	limit := lq.Limit
 	if limit <= 0 {

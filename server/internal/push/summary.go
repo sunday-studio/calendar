@@ -6,7 +6,10 @@ import (
 	"errors"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	"calendar/server/internal/agenda"
+	"calendar/server/internal/telemetry"
 	"calendar/server/internal/tz"
 )
 
@@ -44,7 +47,13 @@ func (d *Dispatcher) SummaryTick(ctx context.Context, store *agenda.Store) error
 	if _, err := d.DB.W.ExecContext(ctx, `INSERT INTO meta(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, summaryKey, date); err != nil {
 		return err
 	}
-	_, err = d.deliver(ctx, alertMsg("summary", map[string]any{"date": date}, "summary", "summary-"+date))
+	ctx, span := telemetry.StartSpan(ctx, "push.summary")
+	defer span.End()
+	n, err := d.deliver(ctx, alertMsg("summary", map[string]any{"date": date}, "summary", "summary-"+date))
+	if err == nil {
+		telemetry.Add(ctx, "push.summary_sent", 1)
+		span.SetAttributes(attribute.Int("calendar.push.devices", n))
+	}
 	return err
 }
 
@@ -57,12 +66,14 @@ func (d *Dispatcher) RunSummary(ctx context.Context, store *agenda.Store) {
 		case <-ctx.Done():
 			return
 		case <-tk.C:
-			if err := d.SummaryTick(ctx, store); err != nil && ctx.Err() == nil {
-				d.log().Error("push summary", "err", err)
-			}
-			if err := d.ReminderTick(ctx, store); err != nil && ctx.Err() == nil {
-				d.log().Error("push reminders", "err", err)
-			}
+			telemetry.Safe(ctx, "push.summary", func() {
+				if err := d.SummaryTick(ctx, store); err != nil && ctx.Err() == nil {
+					telemetry.RecordError(ctx, "push", err, telemetry.Operation("summary_tick"))
+				}
+				if err := d.ReminderTick(ctx, store); err != nil && ctx.Err() == nil {
+					telemetry.RecordError(ctx, "push", err, telemetry.Operation("reminder_tick"))
+				}
+			})
 		}
 	}
 }

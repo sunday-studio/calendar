@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -14,7 +15,11 @@ import (
 	"sync"
 	"time"
 
-	_ "modernc.org/sqlite"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+	"modernc.org/sqlite"
+
+	"calendar/server/internal/telemetry"
 )
 
 //go:embed migrations/*.sql
@@ -123,12 +128,18 @@ func (d *DB) Migrate(ctx context.Context) error {
 		names = append(names, e.Name())
 	}
 	sort.Strings(names)
+	ctx, span := telemetry.StartSpan(ctx, "db.migrate", attribute.Int("calendar.migrations.known", len(names)))
+	defer span.End()
+	applied := 0
+	defer func() { span.SetAttributes(attribute.Int("calendar.migrations.applied", applied)) }()
 	if err := d.backupBeforeUpgrade(ctx, names); err != nil {
+		telemetry.RecordError(ctx, "db", err, telemetry.Operation("migrate_backup"))
 		return err
 	}
 	for _, n := range names {
 		var done int
 		if err := d.W.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations WHERE name=?`, n).Scan(&done); err != nil {
+			telemetry.RecordError(ctx, "db", err, telemetry.Operation("migrate"))
 			return err
 		}
 		if done > 0 {
@@ -146,8 +157,14 @@ func (d *DB) Migrate(ctx context.Context) error {
 			return err
 		})
 		if err != nil {
-			return fmt.Errorf("migration %s: %w", n, err)
+			err = fmt.Errorf("migration %s: %w", n, err)
+			telemetry.RecordError(ctx, "db", err, telemetry.Operation("migrate"))
+			return err
 		}
+		applied++
+		telemetry.Inc(ctx, "db.migrations.applied")
+		span.AddEvent("migration applied")
+		telemetry.Log().InfoContext(ctx, "migration applied", "name", n)
 	}
 	return nil
 }
@@ -184,21 +201,67 @@ func (t *Tx) Change(ctx context.Context, entity, id, op string) error {
 	return err
 }
 
-// Write runs fn in the single-writer transaction; commits on nil, rolls back on error.
-func (d *DB) Write(ctx context.Context, fn func(tx *Tx) error) error {
+// slowTx is the write-transaction duration beyond which a span event and calendar.db.slow_queries fire.
+const slowTx = 50 * time.Millisecond
+
+func isBusy(err error) bool {
+	var se *sqlite.Error
+	if errors.As(err, &se) {
+		c := se.Code() & 0xff
+		return c == 5 || c == 6 // SQLITE_BUSY, SQLITE_LOCKED
+	}
+	return false
+}
+
+// Write runs fn in the single-writer transaction; commits on nil, rolls back on error. Each call is a
+// "db.write" span (child of the caller's span) with calendar.db.write.duration, lock-wait and slow-
+// transaction accounting. An error returned by fn is the caller's to classify (it may be an expected
+// condition such as a conflict); a failure of the database itself (begin, commit, busy) is recorded here.
+func (d *DB) Write(ctx context.Context, fn func(tx *Tx) error) (err error) {
+	ctx, span := telemetry.StartSpan(ctx, "db.write")
+	start := time.Now()
+	outcome := "committed"
+	defer func() {
+		dur := time.Since(start)
+		telemetry.Record(ctx, "db.write.duration", dur.Seconds())
+		telemetry.Inc(ctx, "db.write.transactions", telemetry.Outcome(outcome))
+		if dur > slowTx {
+			telemetry.Inc(ctx, "db.slow_queries")
+			span.AddEvent("slow write transaction", trace.WithAttributes(attribute.Int64("calendar.duration_ms", dur.Milliseconds())))
+		}
+		span.SetAttributes(attribute.String("calendar.db.outcome", outcome))
+		span.End()
+	}()
 	sqlTx, err := d.W.BeginTx(ctx, nil)
+	if wait := time.Since(start); wait > slowTx || err != nil {
+		if isBusy(err) || wait > slowTx {
+			telemetry.Inc(ctx, "db.busy", telemetry.Attr("reason", map[bool]string{true: "timeout", false: "wait"}[err != nil]))
+			span.AddEvent("waited for the writer lock", trace.WithAttributes(attribute.Int64("calendar.wait_ms", wait.Milliseconds())))
+		}
+	}
 	if err != nil {
+		outcome = "failed"
+		if ctx.Err() == nil {
+			telemetry.RecordError(ctx, "db", err, telemetry.Operation("begin"))
+		}
 		return err
 	}
 	tx := &Tx{Tx: sqlTx}
 	if err := fn(tx); err != nil {
 		sqlTx.Rollback()
+		outcome = "rolled_back"
+		if isBusy(err) {
+			telemetry.Inc(ctx, "db.busy", telemetry.Attr("reason", "timeout"))
+		}
 		return err
 	}
 	if err := sqlTx.Commit(); err != nil {
+		outcome = "failed"
+		telemetry.RecordError(ctx, "db", err, telemetry.Operation("commit"))
 		return err
 	}
 	if tx.changed {
+		span.SetAttributes(attribute.Int64("calendar.db.rev", tx.rev))
 		d.hookMu.RLock()
 		hs := d.hooks
 		d.hookMu.RUnlock()
@@ -257,4 +320,59 @@ func (d *DB) backupBeforeUpgrade(ctx context.Context, all []string) error {
 		old = old[1:]
 	}
 	return nil
+}
+
+// RegisterGauges registers the observable gauges calendar.db.rev, db.size_bytes, db.wal_bytes,
+// calendar.events and calendar.occurrences. Counts are cached for 30 s so a scrape never scans tables
+// repeatedly. Call once at start-up after telemetry.Setup. The returned function unregisters them.
+func (d *DB) RegisterGauges() func() {
+	var mu sync.Mutex
+	var at time.Time
+	var ev, oc int64
+	counts := func(ctx context.Context) (int64, int64) {
+		mu.Lock()
+		defer mu.Unlock()
+		if time.Since(at) > 30*time.Second {
+			cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+			defer cancel()
+			_ = d.R.QueryRowContext(cctx, `SELECT COUNT(*) FROM events WHERE deleted_at IS NULL`).Scan(&ev)
+			_ = d.R.QueryRowContext(cctx, `SELECT COUNT(*) FROM occurrences`).Scan(&oc)
+			at = time.Now()
+		}
+		return ev, oc
+	}
+	var offs []func()
+	one := func(name, desc, unit string, f func(ctx context.Context) (float64, bool)) {
+		offs = append(offs, telemetry.GaugeSet(name, desc, unit, func(ctx context.Context) []telemetry.Observation {
+			if v, ok := f(ctx); ok {
+				return []telemetry.Observation{{Value: v}}
+			}
+			return nil
+		}))
+	}
+	one("db.rev", "Current database revision (meta.rev); it moves with every user-visible change", "1", func(ctx context.Context) (float64, bool) {
+		r, err := d.Rev(ctx)
+		return float64(r), err == nil
+	})
+	one("db.size_bytes", "SQLite database size (page_count * page_size)", "By", func(ctx context.Context) (float64, bool) {
+		n, err := d.SizeBytes(ctx)
+		return float64(n), err == nil
+	})
+	one("db.wal_bytes", "Size of the SQLite write-ahead log file", "By", func(context.Context) (float64, bool) {
+		if d.path == "" || strings.HasPrefix(d.path, ":") {
+			return 0, false
+		}
+		fi, err := os.Stat(d.path + "-wal")
+		if err != nil {
+			return 0, err != nil && errors.Is(err, os.ErrNotExist)
+		}
+		return float64(fi.Size()), true
+	})
+	one("events", "Live events in the mirror", "{event}", func(ctx context.Context) (float64, bool) { e, _ := counts(ctx); return float64(e), true })
+	one("occurrences", "Rows in the occurrence read model", "{occurrence}", func(ctx context.Context) (float64, bool) { _, o := counts(ctx); return float64(o), true })
+	return func() {
+		for _, f := range offs {
+			f()
+		}
+	}
 }
