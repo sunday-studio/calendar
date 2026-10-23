@@ -88,7 +88,8 @@ func acct(_ status: String, detail: String? = nil, color: String = "cobalt") -> 
         #expect(f.hints.count >= 2)
         #expect(state(m, .reach) == .failed("timed out"))
         #expect(state(m, .token) == .pending)
-        #expect(f.detail == "Nothing was saved.")
+        #expect(f.detail.hasPrefix("Nothing was saved. Tried https://hub.tail1.ts.net."))
+        #expect(f.detail.hasSuffix("timed out"))
         #expect(box.saved.isEmpty)
     }
 

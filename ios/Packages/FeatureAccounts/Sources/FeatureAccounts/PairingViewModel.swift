@@ -197,19 +197,19 @@ public final class PairingViewModel {
             step = .paired(hello)
         } catch let e as APIClientError {
             guard attempt == mine else { return }
-            fail(e, host: hostName)
+            fail(e, host: hostName, target: url.absoluteString)
         } catch {
             guard attempt == mine else { return }
-            fail(.transport(error.localizedDescription), host: hostName)
+            fail(.transport(error.localizedDescription), host: hostName, target: url.absoluteString)
         }
     }
 
-    private func fail(_ e: APIClientError, host: String) {
+    private func fail(_ e: APIClientError, host: String, target: String) {
         switch e {
         case .transport(let msg):
             mark(.reach, .failed(msg))
             step = .failed(PairFailure(
-                headline: "Can\u{2019}t reach \(host).", detail: "Nothing was saved.",
+                headline: "Can\u{2019}t reach \(host).", detail: "Nothing was saved. Tried \(target). \(msg)",
                 hints: [
                     PairHint(title: "Tailscale is on", detail: "Open Tailscale and make sure this phone shows as connected."),
                     PairHint(title: "The server is running", detail: "The hub container should be up on your home server."),
@@ -218,7 +218,7 @@ public final class PairingViewModel {
         case .tls(let msg):
             mark(.reach, .failed(msg))
             step = .failed(PairFailure(
-                headline: "The secure connection to \(host) failed.", detail: "Nothing was saved.",
+                headline: "The secure connection to \(host) failed.", detail: "Nothing was saved. Tried \(target). \(msg)",
                 hints: [
                     PairHint(title: "The address starts with https", detail: "Plain http only works on this phone itself."),
                     PairHint(title: "HTTPS is set up on the server", detail: "Run tailscale serve on the home server."),

@@ -115,8 +115,8 @@ extension APIClientTests {
     }
 
     @Test func tlsErrorsAreDistinguished() {
-        #expect(APIClient.map(URLError(.secureConnectionFailed)) == .tls(URLError(.secureConnectionFailed).localizedDescription))
-        #expect(APIClient.map(URLError(.timedOut)) == .transport(URLError(.timedOut).localizedDescription))
+        #expect(APIClient.map(URLError(.secureConnectionFailed)) == .tls(APIClient.describe(URLError(.secureConnectionFailed))))
+        #expect(APIClient.map(URLError(.timedOut)) == .transport(APIClient.describe(URLError(.timedOut))))
     }
 
     @Test func statusKindMapsWireEnum() {

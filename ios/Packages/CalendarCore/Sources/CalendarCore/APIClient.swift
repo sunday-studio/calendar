@@ -240,14 +240,19 @@ public actor APIClient {
         }
     }
 
+    /// Plain-language text plus the system code, so a failure on a real phone can be diagnosed from the screen.
+    static func describe(_ e: URLError) -> String {
+        "\(e.localizedDescription) (NSURLErrorDomain \(e.code.rawValue))"
+    }
+
     static func map(_ e: URLError) -> APIClientError {
         switch e.code {
         case .secureConnectionFailed, .serverCertificateHasBadDate, .serverCertificateUntrusted,
              .serverCertificateHasUnknownRoot, .serverCertificateNotYetValid,
              .clientCertificateRejected, .clientCertificateRequired, .appTransportSecurityRequiresSecureConnection:
-            return .tls(e.localizedDescription)
+            return .tls(describe(e))
         default:
-            return .transport(e.localizedDescription)
+            return .transport(describe(e))
         }
     }
 
