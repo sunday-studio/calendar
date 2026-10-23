@@ -4,6 +4,11 @@
 > `gh workflow enable ci.yml --repo sunday-studio/calendar && gh workflow enable release.yml --repo sunday-studio/calendar`
 > Dependabot version updates are a separate setting (`.github/dependabot.yml`) and are still active.
 
+**Known failures when you switch it back on** (last runs before it was disabled, 2026-10-22/23):
+- `govulncheck` still reports Go standard-library vulnerabilities: `setup-go` installs Go 1.26.0 even with `toolchain go1.26.10` in `server/go.mod`. Fix: pin `go-version: '1.26'` with `check-latest: true` in `ci.yml` (and the same in `release.yml`'s called jobs).
+- `golangci-lint` (advisory) reports unchecked `Close`/`Remove` errors, mostly in `server/internal/backup`.
+- The iOS job passed on `ci`, but `test / ios` failed once inside the `release` workflow; check `make ios-test` output there first.
+
 Workflows live in `.github/`. Nothing here has been run on GitHub yet (this folder is not a git repo); the server job's commands (`go vet`, `go test -race -count=1`) pass locally. The Docker image has **not** been built, because no Docker daemon was available when this was written.
 
 ## What runs
