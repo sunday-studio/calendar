@@ -31,3 +31,4 @@
 - [audit-final.md](design/audit-final.md): last design conformance audit.
 - [specs/](specs/README.md): per-screen implementation specs.
 - `screens/`: reference and regression screenshots (`screens/e2e/` for end-to-end runs).
+- ops/local-run.md: run the real hub locally, log your issues before going live

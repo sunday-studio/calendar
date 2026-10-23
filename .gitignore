@@ -52,3 +52,6 @@ xcuserdata/
 
 # Commercial GT America webfonts from an earlier design direction: not used by the app, licensed, never publish.
 /fonts/
+
+# local run data (database, master key, logs, issues)
+.local/

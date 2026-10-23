@@ -112,3 +112,8 @@ build-linux:
 		head -c4 $$out | od -An -c | grep -q 'E *L *F' || { echo "$$out is not an ELF binary"; exit 1; }; \
 		printf '%s  %s bytes\n' $$out $$(wc -c < $$out | tr -d ' '); \
 	done
+
+# Real hub on this machine with persistent data and logs in .local/ (docs/ops/local-run.md)
+.PHONY: run-local
+run-local:
+	./scripts/run-local.sh
