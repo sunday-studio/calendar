@@ -108,19 +108,33 @@ public final class PairingViewModel {
         step = .form
     }
 
-    /// `https://` unless the address is a local development host. Returns nil when unusable.
+    /// `http://` for local, private and Tailscale addresses typed without a scheme, otherwise `https://`. Returns nil when unusable.
     public static func normalize(_ raw: String) -> URL? {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         while s.hasSuffix("/") { s.removeLast() }
         guard !s.isEmpty, !s.contains(" ") else { return nil }
         if !s.contains("://") {
-            let h = s.lowercased()
-            let local = h.hasPrefix("localhost") || h.hasPrefix("127.") || h.hasPrefix("[::1]")
-            s = (local ? "http://" : "https://") + s
+            s = (isPlainHTTPHost(s) ? "http://" : "https://") + s
         }
         guard let url = URL(string: s), let scheme = url.scheme?.lowercased(),
               scheme == "http" || scheme == "https", let h = url.host, !h.isEmpty else { return nil }
         return url
+    }
+
+    /// Hosts that are reached over plain http when the user types no scheme: this phone, `.local` names, hosts
+    /// without a dot, and private, link-local or Tailscale (100.64.0.0/10) IPv4 addresses. Anything else gets https.
+    /// (Release builds still refuse plain http through App Transport Security; Debug builds allow it.)
+    static func isPlainHTTPHost(_ raw: String) -> Bool {
+        var h = raw.lowercased()
+        if let slash = h.firstIndex(of: "/") { h = String(h[..<slash]) }
+        if h.hasPrefix("[") { return h.hasPrefix("[::1]") }
+        if let colon = h.lastIndex(of: ":") { h = String(h[..<colon]) }
+        if h == "localhost" || h.hasSuffix(".local") || !h.contains(".") { return true }
+        let parts = h.split(separator: ".").compactMap { Int($0) }
+        guard parts.count == 4, parts.allSatisfy({ (0...255).contains($0) }) else { return false }
+        let (a, b) = (parts[0], parts[1])
+        return a == 127 || a == 10 || (a == 172 && (16...31).contains(b)) || (a == 192 && b == 168)
+            || (a == 169 && b == 254) || (a == 100 && (64...127).contains(b))
     }
 
     // MARK: Check
