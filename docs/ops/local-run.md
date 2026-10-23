@@ -12,6 +12,12 @@ scripts/run-local.sh logs         # follow today's log (.local/logs/calendard-YY
 ```
 It refuses to start if the port is busy and tells you who holds it. A master key is generated on first run (`.local/master_key`); keep it if you want to keep the data.
 
+## Demo data (no Google needed)
+```sh
+CALENDAR_ADDR=100.127.10.66:8790 scripts/run-local.sh demo
+```
+Runs the real hub against the fake Google used by the end-to-end tests: two accounts (Work, Personal), five calendars and a spread of events (all-day, overlaps, repeating, invitations, Meet links), all arriving through the real sync path. It uses its own database in `.local/demo/` (never your real `.local/calendar.db`) and prints an admin token, also saved in `.local/demo/token`. Data refreshes every 15 s. The fake Google is started for you on port 8788 (`FAKE_PORT` to change). Stop the hub with Ctrl-C; the fake stops with it. Use plain `scripts/run-local.sh` for your real data.
+
 ## Phone
 Pair the app with `http://<mac-ip>:8787` (Debug build, same Wi-Fi, `LAN=1`) and the token. Release builds only talk HTTPS, so use the Tailscale address instead (see below).
 
