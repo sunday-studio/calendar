@@ -32,3 +32,4 @@
 - [specs/](specs/README.md): per-screen implementation specs.
 - `screens/`: reference and regression screenshots (`screens/e2e/` for end-to-end runs).
 - ops/local-run.md: run the real hub locally, log your issues before going live
+- [ops/demo-data.md](ops/demo-data.md): the rich demo dataset, sync-state scenarios and a manual test checklist per screen.

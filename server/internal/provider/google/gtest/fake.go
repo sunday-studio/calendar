@@ -29,6 +29,9 @@ type Event struct {
 
 type Cal struct {
 	ID, Summary, Role string
+	Color, TZ         string // calendarList backgroundColor and timeZone ("" = "#112233" / Europe/London)
+	Hidden            bool   // calendarList hidden
+	Unselected        bool   // calendarList selected:false
 	Events            map[string]*Event
 }
 
@@ -89,6 +92,10 @@ func New(t testing.TB) *Fake {
 
 // Handler is the Google Calendar v3 API (plus /token) of this one account.
 func (f *Fake) Handler() http.Handler { return f.mux }
+
+// StartSeqAt sets the change counter that sync tokens ("st-N") are made from. The rich profile
+// starts it from the clock so that tokens of an earlier run or reset are always older.
+func (f *Fake) StartSeqAt(n int) { f.mu.Lock(); f.seq = n; f.mu.Unlock() }
 
 // InvalidateSyncTokens makes every syncToken issued so far answer 410 (a full re-list is needed).
 func (f *Fake) InvalidateSyncTokens() {
@@ -178,8 +185,22 @@ func (f *Fake) calendarList(w http.ResponseWriter, r *http.Request) {
 	}
 	items := []any{}
 	for i, c := range f.cals {
-		items = append(items, map[string]any{"id": c.ID, "summary": c.Summary, "accessRole": c.Role, "primary": i == 0,
-			"backgroundColor": "#112233", "timeZone": "Europe/London"})
+		color, tz := c.Color, c.TZ
+		if color == "" {
+			color = "#112233"
+		}
+		if tz == "" {
+			tz = "Europe/London"
+		}
+		it := map[string]any{"id": c.ID, "summary": c.Summary, "accessRole": c.Role, "primary": i == 0,
+			"backgroundColor": color, "timeZone": tz}
+		if c.Hidden {
+			it["hidden"] = true
+		}
+		if c.Unselected {
+			it["selected"] = false
+		}
+		items = append(items, it)
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"items": items})
 }
@@ -192,6 +213,80 @@ func (f *Fake) AddCal(id, summary, role string) *Cal {
 	c := &Cal{ID: id, Summary: summary, Role: role, Events: map[string]*Event{}}
 	f.cals = append(f.cals, c)
 	return c
+}
+
+// AddCalWith adds a calendar with list metadata (colour, time zone, hidden, selected:false).
+func (f *Fake) AddCalWith(id, summary, role, color, tz string, hidden, unselected bool) *Cal {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c := &Cal{ID: id, Summary: summary, Role: role, Color: color, TZ: tz, Hidden: hidden, Unselected: unselected, Events: map[string]*Event{}}
+	f.cals = append(f.cals, c)
+	return c
+}
+
+// RemoveCal drops a calendar from the list (as when the user unsubscribes in Google). Reports whether it existed.
+func (f *Fake) RemoveCal(id string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i, c := range f.cals {
+		if c.ID == id {
+			f.cals = append(f.cals[:i:i], f.cals[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+// CalInfo describes a calendar for the admin summary.
+type CalInfo struct {
+	ID, Summary, Role string
+	Hidden            bool
+	Events            int // live events stored (series count once)
+}
+
+// Cals lists the calendars in creation order.
+func (f *Fake) Cals() []CalInfo {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []CalInfo
+	for _, c := range f.cals {
+		n := 0
+		for _, e := range c.Events {
+			if !e.Deleted {
+				n++
+			}
+		}
+		out = append(out, CalInfo{c.ID, c.Summary, c.Role, c.Hidden, n})
+	}
+	return out
+}
+
+// HasCal reports whether the calendar exists.
+func (f *Fake) HasCal(id string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, c := range f.cals {
+		if c.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// Revoked reports whether the refresh token is revoked.
+func (f *Fake) Revoked(rt string) bool { f.mu.Lock(); defer f.mu.Unlock(); return f.revoked[rt] }
+
+// PendingFailures counts the failure rules that still have requests left.
+func (f *Fake) PendingFailures() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := 0
+	for _, r := range f.fail {
+		if r.n > 0 {
+			n++
+		}
+	}
+	return n
 }
 
 func (f *Fake) Revoke(rt string) { f.mu.Lock(); f.revoked[rt] = true; f.mu.Unlock() }

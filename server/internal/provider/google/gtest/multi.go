@@ -19,15 +19,43 @@ func Subject(email string) string      { return "fake-sub-" + email }
 // Multi is a stand-alone fake Google serving several accounts on one port: OAuth auth/token,
 // userinfo, one Calendar v3 per account (routed by the access token) and /_admin/* controls.
 type Multi struct {
-	Emails []string
-	Now    func() time.Time
+	Emails  []string
+	Now     func() time.Time
+	Profile string // ProfileE2E (default) or ProfileRich
+	TZ      string // rich profile: the time zone whose midnight "today" starts at (default Europe/London)
 
 	mu    sync.RWMutex
 	fakes map[string]*Fake
+
+	gmu   sync.Mutex
+	gates []*gate
+	delay time.Duration
 }
 
-func NewMulti(emails ...string) *Multi {
-	m := &Multi{Emails: emails}
+// gate is a Multi-level outage: every request (any path but /_admin and /health) of the account
+// ("" = all) answers code until the deadline passes or n requests have been refused.
+type gate struct {
+	account    string
+	code       int
+	retryAfter string
+	until      time.Time
+	n          int
+	hits       int
+}
+
+// NewMulti is the e2e profile (default dataset, see Seed).
+func NewMulti(emails ...string) *Multi { return NewMultiProfile(ProfileE2E, emails...) }
+
+// NewMultiProfile builds a fake serving the given profile; with no emails the rich profile
+// serves RichAccounts().
+func NewMultiProfile(profile string, emails ...string) *Multi {
+	if profile == "" {
+		profile = ProfileE2E
+	}
+	if profile == ProfileRich && len(emails) == 0 {
+		emails = RichAccounts()
+	}
+	m := &Multi{Emails: emails, Profile: profile}
 	m.Reset()
 	return m
 }
@@ -44,12 +72,22 @@ func (m *Multi) Reset() {
 	fk := map[string]*Fake{}
 	for i, e := range m.Emails {
 		f := NewStandalone(e)
-		Seed(f, i, m.now())
+		if m.Profile == ProfileRich {
+			// sync tokens of a previous process or reset must answer 410 so the hub re-lists
+			f.StartSeqAt(int(time.Now().UnixMilli()) * 1000)
+			SeedRich(f, m.TZ, m.now())
+			f.InvalidateSyncTokens()
+		} else {
+			Seed(f, i, m.now())
+		}
 		fk[e] = f
 	}
 	m.mu.Lock()
 	m.fakes = fk
 	m.mu.Unlock()
+	m.gmu.Lock()
+	m.gates, m.delay = nil, 0
+	m.gmu.Unlock()
 }
 
 func (m *Multi) fake(email string) *Fake {
@@ -95,7 +133,60 @@ func (m *Multi) Handler() http.Handler {
 		}
 		f.Handler().ServeHTTP(w, r)
 	})
-	return mux
+	return m.gated(mux)
+}
+
+// gated applies the scenario outages and delay to everything except /_admin and /health.
+func (m *Multi) gated(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/_admin/") || r.URL.Path == "/health" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		m.gmu.Lock()
+		d := m.delay
+		m.gmu.Unlock()
+		if d > 0 {
+			select {
+			case <-time.After(d):
+			case <-r.Context().Done():
+				return
+			}
+		}
+		email := emailOfToken(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+		if r.URL.Path == "/token" {
+			_ = r.ParseForm()
+			email = emailOfToken(r.Form.Get("refresh_token"))
+		}
+		m.gmu.Lock()
+		var hit *gate
+		live := m.gates[:0]
+		for _, g := range m.gates {
+			if (!g.until.IsZero() && time.Now().After(g.until)) || (g.until.IsZero() && g.n <= 0) {
+				continue
+			}
+			live = append(live, g)
+			if hit == nil && (g.account == "" || g.account == email) {
+				hit = g
+			}
+		}
+		m.gates = live
+		if hit != nil {
+			hit.hits++
+			if hit.until.IsZero() {
+				hit.n--
+			}
+		}
+		m.gmu.Unlock()
+		if hit != nil {
+			if hit.retryAfter != "" {
+				w.Header().Set("Retry-After", hit.retryAfter)
+			}
+			writeJSON(w, hit.code, map[string]any{"error": map[string]any{"code": hit.code, "message": "fake google scenario outage"}})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // auth stands in for Google's consent page: it approves at once and redirects back.
@@ -176,6 +267,9 @@ type adminReq struct {
 	Code       int            `json:"code"`
 	N          int            `json:"n"`
 	RetryAfter string         `json:"retryAfter"`
+	Seconds    int            `json:"seconds"`
+	Ms         int            `json:"ms"`
+	Action     string         `json:"action"`
 }
 
 func (m *Multi) adminRoutes(mux *http.ServeMux) {
@@ -266,6 +360,7 @@ func (m *Multi) adminRoutes(mux *http.ServeMux) {
 		}
 		return map[string]any{"ok": true}, 200
 	})
+	m.scenarioRoutes(mux, post)
 	// state: what each account's Google holds, plus the writes it received.
 	mux.HandleFunc("GET /_admin/state", func(w http.ResponseWriter, r *http.Request) {
 		out := map[string]any{}

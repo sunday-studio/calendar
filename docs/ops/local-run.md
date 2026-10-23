@@ -15,8 +15,14 @@ It refuses to start if the port is busy and tells you who holds it. A master key
 ## Demo data (no Google needed)
 ```sh
 CALENDAR_ADDR=100.127.10.66:8790 scripts/run-local.sh demo
+scripts/run-local.sh scenario list         # sync states you can trigger (reauth, google-down, outside-move, burst, ...)
+scripts/run-local.sh demo-reset            # forget the demo database (hub must be stopped)
 ```
-Runs the real hub against the fake Google used by the end-to-end tests: two accounts (Work, Personal), five calendars and a spread of events (all-day, overlaps, repeating, invitations, Meet links), all arriving through the real sync path. It uses its own database in `.local/demo/` (never your real `.local/calendar.db`) and prints an admin token, also saved in `.local/demo/token`. Data refreshes every 15 s. The fake Google is started for you on port 8788 (`FAKE_PORT` to change). Stop the hub with Ctrl-C; the fake stops with it. Use plain `scripts/run-local.sh` for your real data.
+Runs the real hub against the fake Google with the **rich** dataset: four accounts (work, personal, side, stale), 18 calendars and about 170 events (plus series) that cover every state of the app: in-progress and about-to-start meetings, a 13-event day, overlaps, all-day and multi-day, other time zones and clock changes, long/empty/emoji/RTL titles, every join service, 12 guests, invitations of every kind, recurring series with exceptions, read-only and hidden calendars. Everything arrives through the real sync path and is placed relative to now. It uses its own database in `.local/demo/` (never your real `.local/calendar.db`) and prints an admin token, also saved in `.local/demo/token`. Data refreshes every 15 s. The fake Google is started for you on port 8788 (`FAKE_PORT` to change). Stop the hub with Ctrl-C; the fake stops with it. Use plain `scripts/run-local.sh` for your real data.
+
+- Every seeded item, what it tests and where to look, the scenario commands and a per-screen checklist: [demo-data.md](demo-data.md).
+- A demo database made with the older small dataset is refused; run `demo-reset` once (it deletes only `.local/demo/calendar.db` and the demo token, and refuses while a hub listens on the port). Pair the phone again afterwards.
+- `DEMO_PROFILE=e2e` gives the small dataset that the end-to-end tests use; `DEMO_TZ=<zone>` sets the zone whose midnight starts "today" (default Europe/London). The fake Google can be re-based without restarting: `scripts/run-local.sh scenario reset`.
 
 ## Phone
 Pair the app with `http://<mac-ip>:8787` (Debug build, same Wi-Fi, `LAN=1`) and the token. Release builds only talk HTTPS, so use the Tailscale address instead (see below).
