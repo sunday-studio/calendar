@@ -87,10 +87,13 @@ targets:
         NSSpeechRecognitionUsageDescription: Calendar turns what you say into text on this phone to fill in a new event. Nothing is sent to Apple or to your server until you tap Create.
         NSLocalNetworkUsageDescription: Calendar connects to your own Calendar server on your home network.
         UILaunchScreen: { UIColorName: LaunchBackground, UIImageName: LaunchMark, UIImageRespectsSafeAreaInsets: false }
-        # Debug only: plain http to localhost / local-network dev hubs. The Release build deletes this key
+        # Debug only: plain http to localhost, local-network and Tailscale (100.x) dev hubs. The Release build deletes this key
         # (post-build script below), leaving ATS at its default: HTTPS only.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+          # Debug only: Tailscale addresses (100.64.0.0/10) are not "local networking" to iOS, so a hub reached by
+          # http://100.x.y.z:port needs this. The Release build deletes this whole key, leaving HTTPS only.
+          NSAllowsArbitraryLoads: true
         UIAppFonts:
           - SchibstedGrotesk.ttf
           - DMMono-Regular.ttf
