@@ -271,3 +271,18 @@ Written as plain conditions with a PromQL starting point (Prometheus names). Tun
 6. **Nothing is lost when telemetry is down.** Stdout logs are unchanged and complete; the OTLP copy is stricter (scrubbed, no titles) and best effort.
 
 Privacy for all new signals follows the rules above and is enforced by `TestTelemetryPrivacyAcrossEverySignal` (`internal/events/privacy_test.go`): distinctive titles, descriptions, locations, attendee and account e-mails, refresh and API tokens, remote ids, webhook URLs with secret paths and queries, device tokens, search and quick-add text, alfather URLs and token names are pushed through sync, writes, push, automations, MCP, quick-add, auth and backup, and none may appear in any span, event, metric attribute, OTLP log or stdout line. Webhook and ICS destinations are redacted to a fixed path label (`/webhook`, `/feed`) before they reach a client span, and `telemetry.SafeError` strips the request URL from transport errors.
+
+## Orion (logs only)
+
+Orion's ingest endpoint accepts logs, so enable logs and switch the other two signals off. Put these in `deploy/calendard.env` on the server (or in `.local/otel.env` for a local run, which `scripts/run-local.sh` loads automatically). **The ingest key is a secret: keep it out of git** (`deploy/calendard.env` and `.local/` are git-ignored).
+
+```
+OTEL_SERVICE_NAME=calendard
+OTEL_RESOURCE_ATTRIBUTES=deployment.environment=prod        # local for a local run
+OTEL_TRACES_EXPORTER=none
+OTEL_METRICS_EXPORTER=none
+OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://orion.labs.casprine.com/v1/ingest/otlp/v1/logs
+OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20<your orion_ik_… key>
+```
+
+Notes: the hub's Go exporter sends OTLP over `http/protobuf`; Orion's quickstart shows `http/json`, which the Go SDK does not offer, and Orion accepts the protobuf payload (verified 2026-10-24: records appeared in Service logs). The space after `Bearer` must be written `%20` in this variable. When Orion gets traces and metrics endpoints, replace the two `none` lines with `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` and `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`.

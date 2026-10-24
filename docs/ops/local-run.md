@@ -44,3 +44,6 @@ Any `OTEL_*` variable you export passes straight through. For a local viewer sta
 
 ## Reset
 Stop the hub, then `rm -rf .local` for a clean start (this deletes the database and the master key).
+
+## Local telemetry settings
+Put `OTEL_*` variables in `.local/otel.env` (git-ignored); `scripts/run-local.sh` loads it for `serve` and `demo`. Orion example: `docs/engineering/observability.md`.
