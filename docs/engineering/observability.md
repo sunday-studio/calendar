@@ -281,7 +281,7 @@ OTEL_SERVICE_NAME=calendard
 OTEL_RESOURCE_ATTRIBUTES=deployment.environment=prod        # local for a local run
 OTEL_TRACES_EXPORTER=none
 OTEL_METRICS_EXPORTER=none
-OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://orion.labs.casprine.com/v1/ingest/otlp/v1/logs
+OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://otlp.example.com/v1/ingest/otlp/v1/logs
 OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20<your orion_ik_… key>
 ```
 

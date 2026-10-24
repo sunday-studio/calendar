@@ -1,4 +1,4 @@
-# Gnomon — Engineering Plan
+# Engineering plan and architecture (design name: Gnomon)
 
 _2026-10-11 · builds on [RESEARCH.md](../product/RESEARCH.md) (rev 3), [PLAN.md](../product/PLAN.md) (stories E0–E8) and the Gnomon design set in [design notes](../design/README.md)_
 
@@ -6,6 +6,8 @@ _2026-10-11 · builds on [RESEARCH.md](../product/RESEARCH.md) (rev 3), [PLAN.md
 
 > **Names (synced 2026-10-11):** code and config use the shipped identifiers: binary `calendard`, Go module `calendar/server`, token prefix `cal_`, environment `CALENDAR_*`, URL scheme `calendar://`, Swift packages `CalendarCore`/`CalendarUI`. "Gnomon" is only the design set's name (DECISIONS D8).
 > **Where the build deviates from this plan:** no code generators and plain `database/sql` instead of sqlc/oapi-codegen (D2, D3); `sqlc diff` in the CI list does not apply; backups are encrypted in-process with a key derived from the master key instead of `age` + cron (DECISIONS section D, entry B4); `calendard pair` (QR) is not built. DECISIONS.md section D is the record of every other choice.
+
+> **What is built today (2026-10-24):** this is the original engineering plan, kept for its architecture and reasoning. Providers built: Google (read and write) and ICS (read only); Microsoft Graph and iCloud CalDAV exist only in the plan. The iOS deployment target is iOS 26.0 (the table below says iOS 18; DECISIONS D1). The Week view was removed (views are Agenda, Day, 3 days). The hub also has OpenTelemetry ([observability.md](observability.md)) and a local demo mode ([local-run.md](../ops/local-run.md)). Status per task: [STATUS.md](../process/STATUS.md).
 
 > **This replaces the stack assumptions in PLAN.md** (Expo + TypeScript → **SwiftUI + Go**). User stories and milestones M0–M7 stay as they are. This doc says how to build them.
 

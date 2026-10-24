@@ -1,4 +1,6 @@
-# Build Status — three lanes
+# Build Status
+
+_Updated 2026-10-24. Version 0.1.0 (pre-release). Everything is built and tested against fakes (fake Google, fixtures, the simulator); nothing has run against real Google or on a physical iPhone. See the table "Since 0.1.0" for the current work and CI for why CI is off._
 
 _Coordinator (session "cordinator") owns this file. Lane agents tick their own rows and append to DECISIONS.md §D. One task at a time per lane; each task ends with a short report to the coordinator._
 
@@ -51,12 +53,28 @@ T01 server skeleton · T02 contract + fixture hub + iOS project · T03 design sy
 | S8 | Haptics service + settings toggle + event→feedback map (tests), wired into snap/lift/paging/FAB/sheets/save/RSVP/undo/conflict/failure | M7 | done |
 | S9 | Motion: zoom transition row/hero/block → Event detail, FAB → New event zoom, view-mode cross-fade, animated list changes, staggered first load, Reduce Motion = cross-fade only | M7 | done (frame times not measured; flip-cell animation pref has nothing to gate yet) |
 | S10 | Week view REMOVED at user request (views: Agenda, Day, 3 days); view select stays in the header. More haptics (row/invite/hero tap, Today, month toggle, drop); motion simplified (no stagger or list slide, press dim, spring on drop) | M7 | done |
+| S11 | Widgets v2 (Home Screen sizes, states, intent, Day/B variants, lock accessories, modes), notification copy + categories + invitation replies, long-look extension, Live Activity v2, MOVED memory, Log out row, Home Draft row, "Can't reach" banner. Open: thumbnails, overlap/invitation producers, travel time, device verification | M7 | done in code, unverified on device |
 | iOS E2E | XCUITest against the real hub + fake Google (`make ios-e2e-real`, docs/engineering/e2e.md): pair, accounts, Home, month/Day/3-day/Week, detail, create, conflict, RSVP, delete+Undo, hide calendar, quick add, search, pull to refresh, Google refusal, hub offline | M7 | done (passes; 37 screenshots in docs/screens/e2e) |
 
 ## CI lane
 | ID | Task | M | Status |
 |---|---|---|---|
-| CI | GitHub Actions ci.yml + release.yml (GHCR multi-arch), dependabot, docs/ops/ci.md | M7 | done (unrun on GitHub; image unbuilt, no Docker here) |
+| CI | GitHub Actions ci.yml + release.yml (GHCR multi-arch), dependabot, docs/ops/ci.md | M7 | done, then **switched off on purpose** (2026-10-23): both workflows are disabled on GitHub; the known failures to fix before re-enabling are in docs/ops/ci.md. The image has never been built (no Docker daemon here) |
+
+## Since 0.1.0 (not tied to a lane)
+| Item | Status |
+|---|---|
+| Repo cleanup: documents moved into `docs/`, unused server and iOS code removed, `GNUmakefile` folded into `Makefile` | done |
+| Telemetry: OpenTelemetry traces, metrics and logs, env-only, off by default (docs/engineering/observability.md) | done (tested against a local receiver; no real backend) |
+| Local run and demo: `scripts/run-local.sh` (persistent data, logs, issue log) and `demo` mode against the fake Google (docs/ops/local-run.md) | done |
+| Rich demo data (`--profile rich`) and sync-state scenarios, with a manual test checklist per screen (docs/ops/demo-data.md) | done |
+| Pairing: plain http for Tailscale and private addresses in Debug builds only, scheme defaults, attempted URL and error code on failure | done |
+| Quick add, free time and search follow the 24-hour clock preference | done |
+| Widgets and notifications v2: design and spec (docs/specs/widgets-notifications.md); widgets phase 1 is S11 above | spec done; phase 1 built; rest open |
+| Release setup: `VERSION`, `scripts/release.sh`, TestFlight archive scripts, docs/ops/RELEASING.md and testflight.md (paid team id needed for push and Time Sensitive) | done; no TestFlight upload yet |
+| GitHub documentation: README, screenshots, diagrams, `scripts/screenshots.sh`, docs index and link check | done |
+| CI | off on purpose (see the CI row) |
+| Not done and needs the owner: real Google run (H1, H6), real device checks of push, widgets and the App Group, APNs key, license choice | open (docs/process/DECISIONS.md section B) |
 
 ## Rules
 1. No screen is built without the design agent's spec; no screen is "done" without a simulator screenshot checked against its hi-fi frame.

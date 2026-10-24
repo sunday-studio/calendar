@@ -9,7 +9,7 @@
 - `golangci-lint` (advisory) reports unchecked `Close`/`Remove` errors, mostly in `server/internal/backup`.
 - The iOS job passed on `ci`, but `test / ios` failed once inside the `release` workflow; check `make ios-test` output there first.
 
-Workflows live in `.github/`. Nothing here has been run on GitHub yet (this folder is not a git repo); the server job's commands (`go vet`, `go test -race -count=1`) pass locally. The Docker image has **not** been built, because no Docker daemon was available when this was written.
+Workflows live in `.github/`. The workflows ran on GitHub before they were switched off (see the known failures above); the server job's commands (`go vet`, `go test -race -count=1`) also pass locally. The Docker image has **not** been built, because no Docker daemon was available when this was written.
 
 ## What runs
 

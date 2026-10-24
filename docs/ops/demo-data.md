@@ -4,7 +4,7 @@
 
 ## Start, switch, reset
 ```sh
-CALENDAR_ADDR=100.127.10.66:8790 scripts/run-local.sh demo     # rich profile; hub on that address, fake Google on 127.0.0.1:8788
+CALENDAR_ADDR=<tailscale-ip>:8790 scripts/run-local.sh demo     # rich profile; hub on that address, fake Google on 127.0.0.1:8788
 scripts/run-local.sh demo-reset                                # delete .local/demo's database (only when no hub listens on the port)
 scripts/run-local.sh scenario list                             # what the fake holds now + the scenario names
 DEMO_PROFILE=e2e scripts/run-local.sh demo                     # the small e2e dataset instead

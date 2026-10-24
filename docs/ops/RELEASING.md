@@ -1,6 +1,6 @@
 # Releasing Calendar
 
-One product, one version. The hub image and the iOS app are released together under the same SemVer number. Nothing here has been run on GitHub yet: this folder is not a git repo, and the workflows and `scripts/release.sh` were checked with `actionlint`, `bash -n`/`shellcheck` and a dry run in a scratch repo only.
+One product, one version. The hub image and the iOS app are released together under the same SemVer number. The repository is on GitHub (private) and CI is switched off for now (see [ci.md](ci.md)). The workflows and `scripts/release.sh` were checked with `actionlint`, `bash -n`/`shellcheck` and a dry run in a scratch repo; a real release has not been cut with them.
 
 ## Versioning policy
 

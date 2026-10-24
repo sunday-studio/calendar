@@ -14,7 +14,7 @@ It refuses to start if the port is busy and tells you who holds it. A master key
 
 ## Demo data (no Google needed)
 ```sh
-CALENDAR_ADDR=100.127.10.66:8790 scripts/run-local.sh demo
+CALENDAR_ADDR=<tailscale-ip>:8790 scripts/run-local.sh demo
 scripts/run-local.sh scenario list         # sync states you can trigger (reauth, google-down, outside-move, burst, ...)
 scripts/run-local.sh demo-reset            # forget the demo database (hub must be stopped)
 ```

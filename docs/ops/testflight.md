@@ -1,6 +1,6 @@
 # TestFlight / Release builds on your own hub
 
-Why: the free Personal Team (`2QG5WSN24S`) cannot do Push or Time Sensitive Notifications and its installs expire
+Why: the free Personal Team cannot do Push or Time Sensitive Notifications and its installs expire
 after 7 days. A paid-team Release build (TestFlight, or ad hoc) has neither limit. The Debug/personal flow is unchanged.
 
 ## Team id: one variable, no file edits

@@ -6,6 +6,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+Everything here is built and tested against fakes, like 0.1.0; nothing is verified on a physical device or against real Google.
+
+### Added
+- OpenTelemetry for the hub: traces, metrics and logs over OTLP, off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set,
+  configured only through standard `OTEL_*` variables (see [observability.md](../engineering/observability.md)).
+  `calendard doctor` reports and probes it.
+- Local run and demo mode: `scripts/run-local.sh` runs the real hub with persistent data, logs and an issue log;
+  `scripts/run-local.sh demo` runs it against the fake Google with its own database (docs/ops/local-run.md).
+- Rich demo data and scenarios: a `rich` profile for the fake Google (four accounts, every UI state, odd time zones,
+  DST edges, long and unusual text) and `scripts/run-local.sh scenario` to trigger sync states such as re-auth,
+  outages, rate limits, outside edits and bursts (docs/ops/demo-data.md).
+- Widgets and notifications v2 design and spec (docs/specs/widgets-notifications.md); widgets phase 1 (small,
+  medium, large agenda, states) is built.
+- Documentation: README rewrite with screenshots, architecture and write-flow diagrams, an assets folder
+  (`docs/assets`) and `scripts/screenshots.sh`, which regenerates the screenshots from the real app.
+
+### Changed
+- Debug builds of the iOS app allow plain http to Tailscale addresses; Release builds are unchanged.
+- Pairing: an address typed without a scheme gets `http://` for private and Tailscale addresses (and `https://`
+  otherwise), and a failed pairing shows the attempted URL and the system error code.
+- Repo cleanup: all documents moved into `docs/`, `GNUmakefile` folded into `Makefile`, unused server code, iOS
+  code, tokens and the Newsreader font removed.
+
+### Fixed
+- Quick add, free time and search follow the 24-hour clock preference.
+
 ## [0.1.0] - 2026-10-23
 
 First tagged version. Everything below was built and tested against fakes (a fake Google, fixtures, the iOS
