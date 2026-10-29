@@ -89,7 +89,7 @@ func remoteID(seed string) string {
 		return ""
 	}
 	h := sha256.Sum256([]byte(seed))
-	return base32.HexEncoding.WithPadding(base32.NoPadding).EncodeToString(h[:16])[:26]
+	return strings.ToLower(base32.HexEncoding.WithPadding(base32.NoPadding).EncodeToString(h[:16])[:26])
 }
 
 // ---- session: lock + account + provider ----
