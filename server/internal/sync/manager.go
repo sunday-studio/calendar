@@ -773,7 +773,7 @@ func (m *Manager) syncCalendar(ctx context.Context, prov provider.Provider, acct
 			resyncs++
 			telemetry.Inc(ctx, "sync.cursor_resets", pname, telemetry.Attr("reason", "410"))
 			span.AddEvent("sync.cursor_reset", trace.WithAttributes(attribute.String("calendar.reason", "410")))
-			telemetry.Log().InfoContext(ctx, "sync cursor expired; full resync", "account", acct.ID, "provider", acct.Provider)
+			telemetry.Log().InfoContext(ctx, "sync cursor expired; full resync", "account", acct.ID, "provider", acct.Provider, "why", serr.Error())
 			if _, e := m.DB.W.ExecContext(ctx, `UPDATE calendars SET sync_cursor=NULL WHERE id=?`, cal.ID); e != nil {
 				telemetry.RecordError(ctx, "sync", e, telemetry.Operation("reset_cursor"))
 				return total, e

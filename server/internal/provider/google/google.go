@@ -127,7 +127,13 @@ func classify(resp *http.Response, body []byte) error {
 	case 401:
 		return provider.ErrNeedsReauth
 	case 410:
-		return provider.ErrCursorExpired
+		var eb gErrBody
+		_ = json.Unmarshal(body, &eb)
+		reason := "unknown"
+		if len(eb.Error.Errors) > 0 && eb.Error.Errors[0].Reason != "" {
+			reason = eb.Error.Errors[0].Reason
+		}
+		return fmt.Errorf("%w: google reason %s", provider.ErrCursorExpired, reason)
 	case 412:
 		return provider.ErrPreconditionFailed
 	case 429:
