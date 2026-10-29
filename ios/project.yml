@@ -71,9 +71,11 @@ targets:
           fi
     entitlements:
       path: Calendar/Calendar.entitlements
-      properties: &shared_entitlements
-        com.apple.security.application-groups: [group.dev.casprine.calendar]
-        keychain-access-groups: ["$(AppIdentifierPrefix)dev.casprine.calendar.shared"]
+      properties:
+        <<: &shared_entitlements
+          com.apple.security.application-groups: [group.dev.casprine.calendar]
+          keychain-access-groups: ["$(AppIdentifierPrefix)dev.casprine.calendar.shared"]
+        # Push and Time Sensitive belong to the app only; the extensions share just the group and keychain.
         # Push (DECISIONS D S5): "development" is rewritten to "production" by the distribution profile at archive time.
         aps-environment: development
         com.apple.developer.usernotifications.time-sensitive: true
