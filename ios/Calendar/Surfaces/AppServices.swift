@@ -92,6 +92,12 @@ final class AppServices: @unchecked Sendable {
         try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "snz." + UUID().uuidString, content: c, trigger: trigger))
     }
 
+    /// Accept / Maybe / Decline pressed on an invitation banner.
+    func reply(eventId: String, response: RSVPResponse) async {
+        guard let cfg = HubConfigStore().load() else { return }
+        _ = try? await APIClient(config: cfg).rsvp(id: eventId, response: response, note: nil, scope: .this, key: UUID().uuidString)
+    }
+
     func muteSummary() async {
         guard let cfg = HubConfigStore().load() else { return }
         let api = APIClient(config: cfg)
@@ -119,7 +125,8 @@ final class AppRouter {
         switch link {
         case .event(let id): navigator.pending = .event(id)
         case .accounts: navigator.pending = .accounts
-        case .today, .summary: navigator.pending = .today
+        case .today, .summary, .day: navigator.pending = .today
+        case .new: navigator.pending = .newEvent
         }
     }
 }

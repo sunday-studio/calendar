@@ -4,6 +4,10 @@ import Foundation
 public enum SurfaceLink: Equatable, Sendable {
     case event(String)
     case today
+    /// `calendar://day/<yyyy-MM-dd>`
+    case day(String)
+    /// `calendar://new`
+    case new
     case accounts
     case summary(date: String?)
 
@@ -14,6 +18,8 @@ public enum SurfaceLink: Equatable, Sendable {
             c.percentEncodedPath = "/" + (id.addingPercentEncoding(withAllowedCharacters: Self.segment) ?? id)
             return c.url!
         case .today: return URL(string: "calendar://today")!
+        case .day(let d): return URL(string: "calendar://day/\(d)")!
+        case .new: return URL(string: "calendar://new")!
         case .accounts: return URL(string: "calendar://accounts")!
         case .summary(let date):
             return URL(string: "calendar://summary" + (date.map { "?date=\($0)" } ?? ""))!
@@ -31,6 +37,10 @@ public enum SurfaceLink: Equatable, Sendable {
             let id = String(url.path.dropFirst())
             return id.isEmpty ? nil : .event(id)
         case "today": return .today
+        case "day":
+            let d = String(url.path.dropFirst())
+            return d.isEmpty ? .today : .day(d)
+        case "new": return .new
         case "accounts": return .accounts
         case "summary":
             let d = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "date" }?.value

@@ -1,6 +1,7 @@
 import CalendarCore
 import Foundation
 import SurfacesCore
+import SurfacesUI
 import Testing
 
 private let ams = TimeZone(identifier: "Europe/Amsterdam")!
@@ -80,7 +81,7 @@ private func fmt() -> SurfaceFormat { SurfaceFormat(tz: ams, locale: gb) }
         #expect(TimelineBuilder.entry(input([item("a", start: at(11))], paired: false), at: at(10), format: fmt()).content == .noAccounts)
         var bad = account; bad.status = "needs_reauth"
         let e = TimelineBuilder.entry(input([item("a", start: at(11))], accounts: [bad]), at: at(10), format: fmt())
-        #expect(e.content == .needsSignIn(account: "alex@work.example"))
+        #expect(e.content == .needsSignIn(account: "Work"))
         #expect(e.link == .accounts)
     }
 
@@ -151,22 +152,26 @@ private func fmt() -> SurfaceFormat { SurfaceFormat(tz: ams, locale: gb) }
     @Test func defaultLeadAndWording() {
         let meet = Join(url: "https://meet.google.com/abc", kind: "meet")
         let r = plan([item("e1", "Roadmap review", start: at(10, 30), join: meet), item("e2", "Lunch with Sam", start: at(12, 30), location: "Kōya")])
-        #expect(r.count == 2)
+        // Two reminders plus a "starts now" for each event that has a link or a place.
+        #expect(r.count == 4)
         #expect(r[0].fireDate == at(10, 20))
         #expect(r[0].title == "Roadmap review in 10 min")
-        #expect(r[0].body == "10:30 \u{00B7} Google Meet \u{00B7} alex@work.example")
+        #expect(r[0].subtitle == "10:30 \u{00B7} Google Meet")
+        #expect(r[0].body == "alex@work.example. Tap Join to open Google Meet.")
         #expect(r[0].category == NotificationCategory.reminderJoin)
         #expect(r[0].joinURL == "https://meet.google.com/abc")
-        #expect(r[0].timeSensitive)
-        #expect(r[1].title == "Lunch with Sam at 12:30")
-        #expect(r[1].body == "Kōya")
-        #expect(r[1].category == nil && r[1].joinURL == nil && !r[1].timeSensitive)
+        #expect(!r[0].timeSensitive && r[0].relevance == 0.7)
+        #expect(r[1].title == "Roadmap review starts now" && r[1].timeSensitive && r[1].relevance == 1.0)
+        #expect(r[1].subtitle == "Google Meet" && r[1].body == "10:30 to 11:00")
+        #expect(r[2].title == "Lunch with Sam at 12:20".replacingOccurrences(of: "12:20", with: "12:30"))
+        #expect(r[2].subtitle == "Kōya" && r[2].body == "")
+        #expect(r[2].category == NotificationCategory.reminder && r[2].joinURL == nil && !r[2].timeSensitive)
     }
 
     @Test func joinActionOffWhenPreferenceOff() {
         let meet = Join(url: "https://meet.google.com/abc", kind: "meet")
         let r = plan([item("e1", start: at(10, 30), join: meet)], showJoin: false)
-        #expect(r[0].category == nil && r[0].joinURL == nil)
+        #expect(r[0].category == NotificationCategory.reminder && r[0].joinURL == nil)
     }
 
     @Test func perEventOverrideWinsAndNilDefaultMeansNone() {
@@ -190,9 +195,9 @@ private func fmt() -> SurfaceFormat { SurfaceFormat(tz: ams, locale: gb) }
         let r = plan([allDay("b", "Sam's birthday", date: "2026-10-17", endDate: "2026-10-18")])
         #expect(r.count == 1)
         #expect(r[0].fireDate == at(15, 0))
-        #expect(r[0].title == "Sam's birthday tomorrow")
-        #expect(r[0].body == "All day \u{00B7} alex@work.example")
-        #expect(r[0].category == nil)
+        #expect(r[0].title == "Tomorrow: Sam's birthday")
+        #expect(r[0].subtitle == "All day \u{00B7} alex@work.example")
+        #expect(r[0].thread == "day.2026-10-17")
         // alert time later on the same day: 0 min before midnight of the day itself = already passed -> skipped
         let none = plan([allDay("b", "x", date: "2026-10-16", endDate: "2026-10-17")], settings: Settings(alertDefaults: AlertDefaults(timed: 10, allDay: 0)))
         #expect(none.isEmpty)
@@ -293,7 +298,8 @@ private actor FakeCenter: ReminderCenter {
         let n = NotificationRewriter.rewrite(.init(kind: .moved, eventId: "E"),
                                              ctx(.init(title: "Dentist", start: at(11, 45), place: "Personal"), prev: at(11, 0)))
         #expect(n.title == "Dentist moved to 11:45")
-        #expect(n.body == "Was 11:00 \u{00B7} Personal")
+        #expect(n.subtitle == "Was 11:00 \u{00B7} Personal")
+        #expect(n.body == "Today, 45 min later.")
         #expect(n.category == NotificationCategory.moved)
     }
 
@@ -301,17 +307,17 @@ private actor FakeCenter: ReminderCenter {
         let n = NotificationRewriter.rewrite(.init(kind: .moved, eventId: "E"),
                                              ctx(.init(title: "Dentist", start: at(11, 45, day: 17), place: nil), prev: at(11, 0)))
         #expect(n.title == "Dentist moved to tomorrow 11:45")
-        #expect(n.body == "Was Fri 16 Oct 11:00")
+        #expect(n.subtitle == "Was Fri 16 Oct 11:00")
     }
 
     @Test func cancelledNamesTheDay() {
         let n = NotificationRewriter.rewrite(.init(kind: .cancelled, eventId: "E"),
                                              ctx(.init(title: "Gym", start: at(17, 30, day: 18), place: "Home", cancelled: true)))
-        #expect(n.title == "Gym on Sunday cancelled")
-        #expect(n.body == "17:30 \u{00B7} Home")
-        #expect(n.category == nil)
+        #expect(n.title == "Gym at 17:30 cancelled")
+        #expect(n.subtitle == "Home" && n.body == "Removed from Sunday.")
+        #expect(n.category == NotificationCategory.event)
         let t = NotificationRewriter.rewrite(.init(kind: .cancelled, eventId: "E"), ctx(.init(title: "Gym", start: at(17, 30), place: nil)))
-        #expect(t.title == "Gym today cancelled")
+        #expect(t.title == "Gym at 17:30 cancelled" && t.body == "Removed from today.")
     }
 
     @Test func reauthAndSummary() {
@@ -331,8 +337,8 @@ private actor FakeCenter: ReminderCenter {
             #expect(!n.title.isEmpty && !n.body.isEmpty)
             #expect(n == NotificationRewriter.generic(.init(kind: k)))
         }
-        #expect(NotificationRewriter.generic(.init(kind: .changed)).body == "Your calendar changed")
-        #expect(NotificationRewriter.rewrite(.init(kind: .changed), ctx()).body == "Several events changed. Open Calendar to review.")
+        #expect(NotificationRewriter.generic(.init(kind: .changed)).title == "Your calendar changed")
+        #expect(NotificationRewriter.rewrite(.init(kind: .changed), ctx()).body == "Open Calendar to see what is new.")
         // a "moved" push for an event that is gone / cancelled falls back too
         let gone = NotificationRewriter.rewrite(.init(kind: .moved), ctx(.init(title: "X", start: at(10), cancelled: true)))
         #expect(gone == NotificationRewriter.generic(.init(kind: .moved)))
@@ -377,7 +383,7 @@ private struct FakeNotificationHub: NotificationHubAPI {
         let hub = FakeNotificationHub(detail: EventDetail(item: moved, calendarName: "Personal"))
         let n = await NotificationEnricher(api: hub, db: env.db, clock: .fixed(now)).notification(for: .init(kind: .moved, eventId: "E1"))
         #expect(n.title.hasPrefix("Dentist moved to "))
-        #expect(n.body.hasPrefix("Was ") && n.body.hasSuffix("Personal"))
+        #expect(n.subtitle?.hasPrefix("Was ") == true && n.subtitle?.hasSuffix("Personal") == true)
     }
 
     @Test func cancelledUsesTheSavedRowBecauseTheHubReturns404() async throws {
@@ -389,7 +395,7 @@ private struct FakeNotificationHub: NotificationHubAPI {
                                               settings: Settings(userTzid: TimeZone.current.identifier), clock: .fixed(now))
         let n = await NotificationEnricher(api: FakeNotificationHub(), db: env.db, clock: .fixed(now)).notification(for: .init(kind: .cancelled, eventId: "E1"))
         #expect(n.title.hasSuffix("cancelled") && n.title.hasPrefix("Gym"))
-        #expect(n.body.hasSuffix("Home"))
+        #expect(n.subtitle == "Home" && n.body.hasPrefix("Removed from"))
     }
 
     @Test func timeoutFallsBackToGenericText() async {
@@ -405,7 +411,7 @@ private struct FakeNotificationHub: NotificationHubAPI {
         let e = NotificationEnricher(api: hub, db: nil)
         #expect(await e.notification(for: .init(kind: .summary, date: "d")).title == "Today: 1 event")
         #expect(await e.notification(for: .init(kind: .reauth, accountId: "a")).title == "alex@work.example needs you to sign in")
-        #expect(await NotificationEnricher(api: nil, db: nil).notification(for: .init(kind: .summary)).title == "Today")
+        #expect(await NotificationEnricher(api: nil, db: nil).notification(for: .init(kind: .summary)).title == "Your day is ready")
     }
 }
 
@@ -441,7 +447,10 @@ private struct FakeNotificationHub: NotificationHubAPI {
 
     @Test func categoriesHaveTheSpecActions() {
         let cats = Dictionary(uniqueKeysWithValues: NotificationCategories.all().map { ($0.identifier, $0.actions.map(\.title)) })
-        #expect(cats[NotificationCategory.reminderJoin] == ["Join", "Snooze 5 min"])
+        #expect(cats[NotificationCategory.reminderJoin] == ["Join", "Snooze 10 min", "Open"])
+        #expect(cats[NotificationCategory.reminder] == ["Snooze 10 min", "Open"])
+        #expect(cats[NotificationCategory.invite] == ["Accept", "Maybe", "Decline"])
+        #expect(cats[NotificationCategory.conflict] == ["Open day", "Dismiss"])
         #expect(cats[NotificationCategory.moved] == ["View", "OK"])
         #expect(cats[NotificationCategory.reauth] == ["Sign in", "Later"])
         #expect(cats[NotificationCategory.summary] == ["Open today", "Mute"])
@@ -573,5 +582,85 @@ private final class MemoryPushStore: PushRegistrationStore, @unchecked Sendable 
         #expect(m.state == .idle)
         await m.forget()                             // nothing left to unregister
         #expect(await api.unregisters == 1)
+    }
+}
+
+// MARK: - v2 day layout and fill
+
+@Suite struct DayLayoutTests {
+    func input(_ items: [AgendaItem]) -> WidgetInput { WidgetInput(items: items, accounts: [account], lastSyncAt: at(10, 0), tz: ams) }
+    func layout(_ items: [AgendaItem], now: Date) -> DayLayout {
+        TimelineBuilder.layout(input(items), at: now, format: fmt())
+    }
+
+    @Test func heroIsNextAndRowsFollowWithCancelledAndDeclinedHidden() {
+        var cancelled = item("c", "Gym", start: at(17, 30)); cancelled.status = "cancelled"
+        var declined = item("d", "Skip", start: at(13, 0)); declined.myResponse = "declined"
+        let l = layout([item("a", "Roadmap", start: at(10, 30)), item("b", "Lunch", start: at(12, 30)), cancelled, declined], now: at(10, 22))
+        #expect(l.hero?.title == "Roadmap")
+        #expect(l.hero?.sub == "IN 8 MIN")
+        #expect(l.today.map(\.title) == ["Lunch"])
+        #expect(l.todayLeft == 2)
+    }
+
+    @Test func overlapBeatsReplyAndInProgressSaysLeft() {
+        var reply = item("r", "Dinner", start: at(19, 0)); reply.myResponse = "needsAction"; reply.canRSVP = true
+        let l = layout([item("a", "Design review", start: at(14, 30), mins: 60), item("b", "1:1", start: at(15, 0)), reply], now: at(14, 40))
+        #expect(l.hero?.live == true)
+        #expect(l.hero?.sub == "50 MIN LEFT")
+        #expect(l.today.first?.status == "OVERLAP")
+        #expect(l.today.last?.status == "REPLY")
+    }
+
+    @Test func allDayIsALineNotARow() {
+        let l = layout([allDay("ad", "Ana's birthday", date: "2026-10-16", endDate: "2026-10-17"), item("a", "Standup", start: at(11, 0))], now: at(10, 0))
+        #expect(l.allDay.map(\.title) == ["Ana's birthday"])
+        #expect(l.today.isEmpty && l.hero?.title == "Standup")
+    }
+
+    @Test func fillShowsTomorrowUnderALabelAndCountsOverflow() {
+        func rows(_ n: Int, _ p: String) -> [WidgetRowData] { (0..<n).map { WidgetRowData(id: "\(p)\($0)", time: "09:00", title: "\(p)\($0)", status: nil, color: "cobalt", live: false) } }
+        var l = DayLayout(header: "TUE 13", tomorrowHeader: "TOMORROW \u{00B7} WED 14", allDay: [], hero: nil, today: rows(1, "t"), tomorrow: rows(5, "m"), todayLeft: 1)
+        let few = WidgetFill.rows(l, slots: 3)
+        #expect(few.rows.count == 3 && few.tomorrowShown && few.overflow == 4)
+        l.today = rows(6, "t")
+        let many = WidgetFill.rows(l, slots: 3)
+        #expect(many.rows.count == 3 && !many.tomorrowShown && many.overflow == 3)
+        l.today = []; l.hero = nil
+        #expect(WidgetFill.rows(l, slots: 3).rows.first == .label("NEXT \u{00B7} TOMORROW"))
+    }
+
+    @Test func staleLayoutDropsTheHeroAndStatusWords() {
+        let l = TimelineBuilder.layout(input([item("a", "Roadmap", start: at(10, 30)), item("b", "Lunch", start: at(12, 30))]), at: at(10, 22), format: fmt(), stale: true)
+        #expect(l.hero == nil && l.today.count == 2)
+    }
+}
+
+@Suite struct SurfaceLinkV2Tests {
+    @Test func dayAndNewRoundTrip() {
+        #expect(SurfaceLink.parse(SurfaceLink.day("2026-10-13").url) == .day("2026-10-13"))
+        #expect(SurfaceLink.parse(SurfaceLink.new.url) == .new)
+        #expect(SurfaceLink.parse(URL(string: "calendar://today")!) == .today)
+    }
+}
+
+@Suite struct LongLookModelTests {
+    @Test func notifiedEventIsTheOnlyBrightBlockAndJoinComesFromTheLink() {
+        let meet = Join(url: "https://meet.google.com/abc", kind: "meet")
+        let a = item("a", "Roadmap", start: at(10, 30), join: meet)
+        let b = item("b", "Lunch", start: at(11, 30))
+        let m = NotificationContentModel.make(items: [a, b], eventId: "a", now: at(10, 22), tz: ams)
+        #expect(m?.title == "Roadmap" && m?.joinLabel == "Google Meet" && m?.joinURL != nil)
+        #expect(m?.blocks.filter(\.notified).map(\.id) == ["a"])
+        #expect(m?.blocks.count == 2)
+        #expect(NotificationContentModel.make(items: [a], eventId: "zzz", now: at(10, 22), tz: ams) == nil)
+    }
+
+    @Test func movedMarksAreRememberedOnTheLayoutRow() {
+        var moved = item("m", "Dentist", start: at(11, 45))
+        moved.prevStart = at(11, 0); moved.movedAt = at(9, 0)
+        let l = TimelineBuilder.layout(WidgetInput(items: [item("h", "Standup", start: at(10, 30)), moved], accounts: [account], lastSyncAt: at(10, 0), tz: ams),
+                                       at: at(10, 22), format: fmt())
+        #expect(l.today.first?.status == "MOVED" && l.today.first?.spoken.contains("moved from 11:00") == true)
     }
 }

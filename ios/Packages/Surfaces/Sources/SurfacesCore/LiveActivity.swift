@@ -8,6 +8,8 @@ import ActivityKit
 public enum LiveActivityPlanner {
     /// Starts this long before the event (spec: 30 minutes).
     public static let lead: TimeInterval = 30 * 60
+    /// "Ended 10:30" stays this long after the event.
+    public static let endedLinger: TimeInterval = 5 * 60
 
     public struct Desired: Equatable, Sendable {
         public var eventId: String
@@ -112,8 +114,15 @@ public final class LiveActivityController: AfterSyncHook, @unchecked Sendable {
         let items = (try? await GRDBAgendaRepository(db: db).items(from: today.adding(days: -1), to: today.adding(days: 1))) ?? []
         let running = Activity<MeetingActivityAttributes>.activities
         let plan = LiveActivityPlanner.plan(items: items, existing: running.map { $0.attributes.occurrenceId }, now: now)
+        let endedLinger = LiveActivityPlanner.endedLinger
         for a in running where plan.end.contains(a.attributes.occurrenceId) {
-            await a.end(nil, dismissalPolicy: .immediate)
+            // An event that just ended stays as a plain "Ended 10:30" row for 5 minutes, then goes.
+            let state = a.content.state
+            if state.end <= now, now < state.end.addingTimeInterval(endedLinger) {
+                await a.end(ActivityContent(state: state, staleDate: nil), dismissalPolicy: .after(state.end.addingTimeInterval(endedLinger)))
+            } else {
+                await a.end(nil, dismissalPolicy: .immediate)
+            }
         }
         switch plan.action {
         case .start(let d):

@@ -46,6 +46,7 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
         guard let text else { h(content); return }
         content.title = text.title
         content.body = text.body
+        if let s = text.subtitle { content.subtitle = s }
         if let c = text.category { content.categoryIdentifier = c }
         if let t = text.thread { content.threadIdentifier = t }
         h(content)

@@ -55,6 +55,7 @@ targets:
         product: SurfacesUI
       - target: CalendarWidgets
       - target: CalendarNotificationService
+      - target: CalendarNotificationContent
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.casprine.calendar
@@ -164,6 +165,45 @@ targets:
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+  CalendarNotificationContent:
+    type: app-extension
+    platform: iOS
+    sources:
+      - CalendarNotificationContent
+      # Same fonts as the app (owned by design); the long look renders in its own process.
+      - path: Calendar/Resources/Fonts
+        buildPhase: resources
+    dependencies:
+      - package: CalendarCore
+      - package: CalendarUI
+      - package: Surfaces
+        product: SurfacesCore
+      - package: Surfaces
+        product: SurfacesUI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.casprine.calendar.notification-content
+        SKIP_INSTALL: YES
+    entitlements:
+      path: CalendarNotificationContent/CalendarNotificationContent.entitlements
+      properties: *shared_entitlements
+    info:
+      path: CalendarNotificationContent/Info.plist
+      properties:
+        CFBundleDisplayName: Calendar Long Look
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UIAppFonts:
+          - SchibstedGrotesk.ttf
+          - DMMono-Regular.ttf
+          - DMMono-Medium.ttf
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.content-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationViewController
+          NSExtensionAttributes:
+            UNNotificationExtensionCategory: [calendar.reminder.join, calendar.reminder, calendar.event.moved, calendar.conflict, calendar.invite]
+            UNNotificationExtensionDefaultContentHidden: true
+            UNNotificationExtensionInitialContentSizeRatio: 1
   CalendarTests:
     type: bundle.unit-test
     platform: iOS

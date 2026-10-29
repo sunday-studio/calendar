@@ -41,6 +41,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             case .openURL(let url): await MainActor.run { _ = UIApplication.shared.open(url) }
             case .snooze: await AppServices.shared.snooze(content)
             case .muteSummary: await AppServices.shared.muteSummary()
+            case .reply(let id, let response): await AppServices.shared.reply(eventId: id, response: response)
             case .none: break
             }
             done.value()

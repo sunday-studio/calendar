@@ -1,3 +1,4 @@
+import CalendarCore
 import Foundation
 import UserNotifications
 
@@ -10,8 +11,20 @@ public enum NotificationCategories {
         }
         return [
             UNNotificationCategory(identifier: C.reminderJoin, actions: [action(C.actionJoin, "Join", foreground: true),
-                                                                          action(C.actionSnooze, "Snooze 5 min", foreground: false)],
+                                                                          action(C.actionSnooze, "Snooze \(C.snoozeMinutes) min", foreground: false),
+                                                                          action(C.actionOpen, "Open", foreground: true)],
                                    intentIdentifiers: [], options: []),
+            UNNotificationCategory(identifier: C.reminder, actions: [action(C.actionSnooze, "Snooze \(C.snoozeMinutes) min", foreground: false),
+                                                                     action(C.actionOpen, "Open", foreground: true)],
+                                   intentIdentifiers: [], options: []),
+            UNNotificationCategory(identifier: C.conflict, actions: [action(C.actionOpenDay, "Open day", foreground: true),
+                                                                     action(C.actionDismiss, "Dismiss", foreground: false)],
+                                   intentIdentifiers: [], options: []),
+            UNNotificationCategory(identifier: C.invite, actions: [action(C.actionAccept, "Accept", foreground: false),
+                                                                   action(C.actionMaybe, "Maybe", foreground: false),
+                                                                   action(C.actionDecline, "Decline", foreground: false)],
+                                   intentIdentifiers: [], options: []),
+            UNNotificationCategory(identifier: C.event, actions: [], intentIdentifiers: [], options: []),
             UNNotificationCategory(identifier: C.moved, actions: [action(C.actionView, "View", foreground: true),
                                                                   action(C.actionOK, "OK", foreground: false)],
                                    intentIdentifiers: [], options: []),
@@ -30,6 +43,8 @@ public enum NotificationOutcome: Equatable, Sendable {
     case open(SurfaceLink)
     case openURL(URL)
     case snooze
+    /// Accept / Maybe / Decline from an invitation banner.
+    case reply(eventId: String, response: RSVPResponse)
     case muteSummary
     case none
 }
@@ -43,7 +58,11 @@ public enum NotificationRouter {
             if let u = str("join").flatMap(URL.init(string:)) { return .openURL(u) }
             return link(userInfo)
         case C.actionSnooze: return .snooze
-        case C.actionOK, C.actionLater, UNNotificationDismissActionIdentifier: return .none
+        case C.actionOK, C.actionLater, C.actionDismiss, UNNotificationDismissActionIdentifier: return .none
+        case C.actionAccept, C.actionMaybe, C.actionDecline:
+            guard let id = str("eventId") else { return link(userInfo) }
+            return .reply(eventId: id, response: action == C.actionAccept ? .accepted : action == C.actionMaybe ? .tentative : .declined)
+        case C.actionOpenDay: return .open(str("date").map(SurfaceLink.day) ?? .today)
         case C.actionMute: return .muteSummary
         case C.actionSignIn: return .open(.accounts)
         case C.actionOpenToday: return .open(.today)

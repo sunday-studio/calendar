@@ -34,6 +34,8 @@ public struct SystemReminderCenter: ReminderCenter {
         let c = UNMutableNotificationContent()
         c.title = r.title
         c.body = r.body
+        if let s = r.subtitle, !s.isEmpty { c.subtitle = s }
+        c.relevanceScore = r.relevance
         c.sound = .default
         c.threadIdentifier = r.thread
         if let cat = r.category { c.categoryIdentifier = cat }

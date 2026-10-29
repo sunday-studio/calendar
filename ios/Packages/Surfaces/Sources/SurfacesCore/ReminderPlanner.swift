@@ -8,17 +8,20 @@ public struct PlannedReminder: Equatable, Sendable, Identifiable {
     public var eventId: String
     public var fireDate: Date
     public var title: String
+    public var subtitle: String? = nil
     public var body: String
     public var thread: String
     public var joinURL: String?
     public var category: String?    // `NotificationCategory.reminderJoin` when a Join action applies
     public var timeSensitive: Bool
+    /// 1.0 starts-now, 0.7 reminders (system sort within the stack).
+    public var relevance: Double = 0.7
 
     public static let prefix = "rem."
 
     /// Changes whenever anything the user would see or that changes delivery changes.
     public var signature: String {
-        [id, String(Int(fireDate.timeIntervalSince1970)), title, body, joinURL ?? "", category ?? "", timeSensitive ? "1" : "0"]
+        [id, String(Int(fireDate.timeIntervalSince1970)), title, subtitle ?? "", body, joinURL ?? "", category ?? "", timeSensitive ? "1" : "0", String(relevance)]
             .joined(separator: "\u{1F}")
     }
 }
@@ -26,6 +29,12 @@ public struct PlannedReminder: Equatable, Sendable, Identifiable {
 /// Notification categories and action identifiers shared by the app, the planner and the extension.
 public enum NotificationCategory {
     public static let reminderJoin = "calendar.reminder.join"
+    /// Reminder without a link: Snooze and Open only.
+    public static let reminder = "calendar.reminder"
+    public static let conflict = "calendar.conflict"
+    public static let invite = "calendar.invite"
+    /// Cancelled and other event news that has no buttons.
+    public static let event = "calendar.event"
     public static let moved = "calendar.event.moved"
     public static let reauth = "calendar.account.reauth"
     public static let summary = "calendar.summary"
@@ -38,8 +47,15 @@ public enum NotificationCategory {
     public static let actionLater = "later"
     public static let actionOpenToday = "open-today"
     public static let actionMute = "mute"
+    public static let actionOpen = "open"
+    public static let actionOpenDay = "open-day"
+    public static let actionDismiss = "dismiss"
+    public static let actionAccept = "accept"
+    public static let actionMaybe = "maybe"
+    public static let actionDecline = "decline"
 
-    public static let snoozeSeconds: TimeInterval = 5 * 60
+    public static let snoozeMinutes = 10
+    public static let snoozeSeconds: TimeInterval = TimeInterval(snoozeMinutes) * 60
 }
 
 public struct ReminderInput: Sendable {
@@ -90,6 +106,13 @@ public enum ReminderPlanner {
             guard seenIDs.insert(id).inserted, seenEvents.insert(key).inserted else { continue }
             out.append(make(i, id: id, fire: fire, start: start, lead: lead, fmt: fmt, input: input, now: now))
         }
+        // "Starts now": its own time-sensitive alert for events with a link or a place.
+        for i in input.items where !i.allDay && i.status != "cancelled" && i.myResponse != "declined" && !i.id.hasPrefix("pending:") {
+            guard let start = i.start, let end = i.end, start > now.addingTimeInterval(minLead) else { continue }
+            let hasLink = i.join.flatMap { URL(string: $0.url) } != nil
+            guard hasLink || !(i.location ?? "").isEmpty else { continue }
+            out.append(startsNow(i, start: start, end: end, fmt: fmt, input: input))
+        }
         out.sort { ($0.fireDate, $0.id) < ($1.fireDate, $1.id) }
         return Array(out.prefix(cap))
     }
@@ -100,29 +123,50 @@ public enum ReminderPlanner {
         return i.start
     }
 
+    /// `<title> starts now` · "Google Meet" or the place · "10:00 to 10:30"; Join when there is a link.
+    static func startsNow(_ i: AgendaItem, start: Date, end: Date, fmt: SurfaceFormat, input: ReminderInput) -> PlannedReminder {
+        let link = i.join.flatMap { URL(string: $0.url) != nil ? $0 : nil }
+        let joinable = link != nil && input.showJoin
+        return PlannedReminder(
+            id: PlannedReminder.prefix + "now." + i.id, occurrenceId: i.id, eventId: i.eventId, fireDate: start,
+            title: "\(i.title) starts now", subtitle: link.map { SurfaceFormat.joinLabel($0.kind) } ?? i.location,
+            body: "\(fmt.time(start)) to \(fmt.time(end))", thread: "event." + i.eventId,
+            joinURL: joinable ? link?.url : nil,
+            category: joinable ? NotificationCategory.reminderJoin : NotificationCategory.reminder,
+            timeSensitive: true, relevance: 1.0)
+    }
+
     static func make(_ i: AgendaItem, id: String, fire: Date, start: Date, lead: Int, fmt: SurfaceFormat,
                      input: ReminderInput, now: Date) -> PlannedReminder {
         let account = input.accountNames[i.accountId]
         let link = i.join.flatMap { URL(string: $0.url) != nil ? $0 : nil }
         let title: String
-        let body: String
+        var subtitle: String?
+        var body: String
         if i.allDay {
-            // Fired on the day before / morning of: say which day the event is.
-            title = "\(i.title) \(fmt.dayWord(start, now: fire))"
-            body = ["All day", i.location, account].compactMap { $0 }.joined(separator: " \u{00B7} ")
+            // "Tomorrow: Ana's birthday" · "All day · Personal" · "Also tomorrow: Standup at 09:00."
+            let day = fmt.dayWord(start, now: fire)
+            title = "\(day.prefix(1).uppercased() + day.dropFirst()): \(i.title)"
+            subtitle = ["All day", account].compactMap { $0 }.joined(separator: " \u{00B7} ")
+            let same = DayKey(start, in: input.tz)
+            let other = input.items.filter { !$0.allDay && $0.status != "cancelled" && $0.myResponse != "declined" && $0.start.map { DayKey($0, in: input.tz) == same } == true }
+                .min { ($0.start ?? .distantFuture) < ($1.start ?? .distantFuture) }
+            body = other?.start.map { "Also \(day): \(other!.title) at \(fmt.time($0))." } ?? ""
         } else if let link {
             title = lead <= 0 ? "\(i.title) now" : "\(i.title) in \(SurfaceFormat.minutesText(lead))"
-            body = [fmt.time(start), SurfaceFormat.joinLabel(link.kind), account].compactMap { $0 }.joined(separator: " \u{00B7} ")
+            subtitle = "\(fmt.time(start)) \u{00B7} \(SurfaceFormat.joinLabel(link.kind))"
+            body = input.showJoin ? "\(account.map { $0 + ". " } ?? "")Tap Join to open \(SurfaceFormat.joinLabel(link.kind))." : (account ?? "")
         } else {
             title = "\(i.title) at \(fmt.time(start))"
-            body = i.location ?? account ?? ""
+            subtitle = i.location
+            body = ""
         }
         let joinable = link != nil && !i.allDay && input.showJoin
         return PlannedReminder(
-            id: id, occurrenceId: i.id, eventId: i.eventId, fireDate: fire, title: title, body: body,
-            thread: "event." + i.eventId, joinURL: joinable ? link?.url : nil,
-            category: joinable ? NotificationCategory.reminderJoin : nil,
-            timeSensitive: link != nil && !i.allDay && lead <= 60)
+            id: id, occurrenceId: i.id, eventId: i.eventId, fireDate: fire, title: title, subtitle: subtitle, body: body,
+            thread: i.allDay ? "day." + DayKey(start, in: input.tz).rawValue : "event." + i.eventId, joinURL: joinable ? link?.url : nil,
+            category: i.allDay ? NotificationCategory.reminder : (joinable ? NotificationCategory.reminderJoin : NotificationCategory.reminder),
+            timeSensitive: false, relevance: 0.7)
     }
 
     /// Diff against what is pending: ids to remove and reminders to (re)add. A changed fire time, title or body

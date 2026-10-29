@@ -27,6 +27,7 @@ public struct PushPayload: Equatable, Sendable {
 /// What the notification service extension shows.
 public struct RewrittenNotification: Equatable, Sendable {
     public var title: String
+    public var subtitle: String? = nil
     public var body: String
     public var category: String?
     public var thread: String?
@@ -79,22 +80,26 @@ public enum NotificationRewriter {
         case .moved:
             guard let e = c.event, let start = e.start, !e.cancelled else { return generic(p) }
             let when = DayKey(start, in: c.tz) == DayKey(c.now, in: c.tz) ? fmt.time(start) : "\(fmt.dayWord(start, now: c.now)) \(fmt.time(start))"
-            var body: [String] = []
+            // New fact first: "Design review moved to 14:30" · "Was 11:00 · Work" · "Today, 3 h 30 min later."
+            var was: [String] = []
+            var body = ""
             if let old = c.previousStart, old != start {
                 let sameDay = DayKey(old, in: c.tz) == DayKey(start, in: c.tz)
-                body.append("Was " + (sameDay ? fmt.time(old) : "\(fmt.shortDate(old)) \(fmt.time(old))"))
+                was.append("Was " + (sameDay ? fmt.time(old) : "\(fmt.shortDate(old)) \(fmt.time(old))"))
+                let mins = Int((abs(start.timeIntervalSince(old)) / 60).rounded())
+                let day = fmt.dayWord(start, now: c.now)
+                body = "\(day.prefix(1).uppercased() + day.dropFirst()), \(SurfaceFormat.minutesText(mins)) \(start > old ? "later" : "earlier")."
             }
-            if let place = e.place { body.append(place) }
-            return .init(title: "\(e.title) moved to \(when)", body: body.joined(separator: " \u{00B7} "),
-                         category: NotificationCategory.moved, thread: thread(p))
+            if let place = e.place { was.append(place) }
+            return .init(title: "\(e.title) moved to \(when)", subtitle: was.isEmpty ? nil : was.joined(separator: " \u{00B7} "),
+                         body: body, category: NotificationCategory.moved, thread: thread(p))
         case .cancelled:
             guard let e = c.event, let start = e.start ?? e.date.map({ DayKey($0).startOfDay(in: c.tz) }) else { return generic(p) }
             let day = fmt.dayWord(start, now: c.now)
-            let title = day == "today" || day == "tomorrow" ? "\(e.title) \(day) cancelled" : "\(e.title) on \(day) cancelled"
-            let body = [e.allDay ? "All day" : fmt.time(start), e.place].compactMap { $0 }.joined(separator: " \u{00B7} ")
-            return .init(title: title, body: body, category: nil, thread: thread(p))
+            let title = e.allDay ? "\(e.title) cancelled" : "\(e.title) at \(fmt.time(start)) cancelled"
+            return .init(title: title, subtitle: e.place, body: "Removed from \(day).", category: NotificationCategory.event, thread: thread(p))
         case .changed:
-            return .init(title: "Calendar", body: "Several events changed. Open Calendar to review.", category: nil, thread: thread(p))
+            return generic(p)
         case .reauth:
             guard let email = c.accountEmail else { return generic(p) }
             return .init(title: "\(email) needs you to sign in", body: "Its events are paused until you do.",
@@ -111,16 +116,13 @@ public enum NotificationRewriter {
     public static func generic(_ p: PushPayload) -> RewrittenNotification {
         switch p.kind {
         case .reauth:
-            return .init(title: "An account needs you to sign in", body: "Its events are paused until you do.",
+            return .init(title: "An account needs you to sign in", body: "Open Calendar to sign in.",
                          category: NotificationCategory.reauth, thread: thread(p))
         case .summary:
-            return .init(title: "Today", body: "Open Calendar to see your day.", category: NotificationCategory.summary, thread: thread(p))
-        case .moved:
-            return .init(title: "An event moved", body: "Open Calendar to see the new time.", category: NotificationCategory.moved, thread: thread(p))
-        case .cancelled:
-            return .init(title: "An event was cancelled", body: "Open Calendar to see your day.", category: nil, thread: thread(p))
-        case .changed, .sync:
-            return .init(title: "Calendar", body: "Your calendar changed", category: nil, thread: thread(p))
+            return .init(title: "Your day is ready", body: "Open Calendar to see today.", category: NotificationCategory.summary, thread: thread(p))
+        case .moved, .cancelled, .changed, .sync:
+            // The news goes in the first 30 characters of the title; same thread as the enriched text, which replaces it.
+            return .init(title: "Your calendar changed", body: "Open Calendar to see what is new.", category: nil, thread: thread(p))
         }
     }
 

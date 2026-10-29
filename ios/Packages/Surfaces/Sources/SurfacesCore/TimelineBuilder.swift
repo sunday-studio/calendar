@@ -9,8 +9,143 @@ public struct WidgetRowData: Equatable, Sendable, Identifiable {
     public var status: String?
     public var color: String
     public var live: Bool
-    public init(id: String, time: String, title: String, status: String?, color: String, live: Bool) {
+    /// How `status` is drawn: plain, dim mono word, or the filled amber "needs you" tag (OVERLAP, REPLY).
+    public var statusKind: StatusKind
+    /// Spoken form for VoiceOver ("Design review, 14:30, overlaps 1:1 Maya").
+    public var spoken: String
+    /// Declined events shown on request are drawn at 45 %.
+    public var faded: Bool
+    public enum StatusKind: Equatable, Sendable { case none, dim, needsYou }
+    public init(id: String, time: String, title: String, status: String?, color: String, live: Bool,
+                statusKind: StatusKind = .none, spoken: String? = nil, faded: Bool = false) {
         self.id = id; self.time = time; self.title = title; self.status = status; self.color = color; self.live = live
+        self.statusKind = status == nil ? .none : statusKind
+        self.spoken = spoken ?? "\(title), \(time)"
+        self.faded = faded
+    }
+}
+
+/// An all-day event, drawn as the quiet dot line (never a row).
+public struct AllDayChip: Equatable, Sendable {
+    public var title: String
+    public var color: String
+    public init(title: String, color: String) { self.title = title; self.color = color }
+}
+
+/// The Day variant of the large widget: events as blocks on a 33 pt/h timeline that starts at the current time
+/// (rounded down to 15 min) and runs 8.5 h; overlaps split the column (max 3).
+public struct DayTimeline: Sendable {
+    public struct Block: Equatable, Sendable, Identifiable {
+        public var id: String
+        public var title: String
+        public var time: String
+        public var color: String
+        public var start: Date
+        public var end: Date
+        public var column: Int
+        public var columns: Int
+        public var isNext: Bool
+    }
+    public static let hours: Double = 8.5
+    /// Whole hours inside the window, labelled in the user's time zone ("10").
+    public var marks: [(at: Date, label: String)]
+    public var windowStart: Date
+    public var windowEnd: Date
+    public var blocks: [Block]
+}
+
+extension DayTimeline: Equatable {
+    public static func == (a: DayTimeline, b: DayTimeline) -> Bool {
+        a.windowStart == b.windowStart && a.windowEnd == b.windowEnd && a.blocks == b.blocks
+    }
+}
+
+/// The day as the v2 widgets draw it (spec widgets-notifications section 1 ordering rules): a hero event, today's
+/// remaining rows, tomorrow's rows and the all-day line. Sizes take what fits with `WidgetFill`.
+public struct DayLayout: Equatable, Sendable {
+    public struct Hero: Equatable, Sendable {
+        public var id: String
+        public var title: String
+        /// Flip-cell start time.
+        public var time: String
+        public var color: String
+        public var live: Bool
+        public var start: Date
+        public var end: Date
+        /// Mono caps line under the title, without the video tag: "IN 8 MIN", "22 MIN LEFT", "REPLY NEEDED \u{00B7} 19:00".
+        public var sub: String
+        /// "MEET" / "ZOOM" when the event has a video link; `badgeLong` is "GOOGLE MEET".
+        public var badge: String?
+        public var badgeLong: String?
+        public var joinURL: URL?
+        public var needsReply: Bool
+        public var place: String?
+        public var spoken: String
+
+        public init(id: String, title: String, time: String, color: String, live: Bool, start: Date, end: Date, sub: String,
+                    badge: String? = nil, badgeLong: String? = nil, joinURL: URL? = nil, needsReply: Bool = false,
+                    place: String? = nil, spoken: String) {
+            self.id = id; self.title = title; self.time = time; self.color = color; self.live = live; self.start = start; self.end = end
+            self.sub = sub; self.badge = badge; self.badgeLong = badgeLong; self.joinURL = joinURL; self.needsReply = needsReply
+            self.place = place; self.spoken = spoken
+        }
+    }
+
+    /// "TUE 13".
+    public var header: String
+    /// "TOMORROW \u{00B7} WED 14".
+    public var tomorrowHeader: String
+    public var allDay: [AllDayChip]
+    public var hero: Hero?
+    /// Timed events still to come today, after the hero, in order.
+    public var today: [WidgetRowData]
+    public var tomorrow: [WidgetRowData]
+    /// Events not over yet today, the hero included.
+    public var todayLeft: Int
+    public var timeline: DayTimeline?
+
+    public init(header: String, tomorrowHeader: String, allDay: [AllDayChip], hero: Hero?, today: [WidgetRowData],
+                tomorrow: [WidgetRowData], todayLeft: Int, timeline: DayTimeline? = nil) {
+        self.timeline = timeline
+        self.header = header; self.tomorrowHeader = tomorrowHeader; self.allDay = allDay; self.hero = hero
+        self.today = today; self.tomorrow = tomorrow; self.todayLeft = todayLeft
+    }
+}
+
+/// What fits in a widget of a given height: today first, then a label and tomorrow, then "+N MORE".
+public enum WidgetFill {
+    public enum Row: Equatable, Sendable {
+        case event(WidgetRowData)
+        case label(String)
+    }
+
+    public struct Result: Equatable, Sendable {
+        public var rows: [Row]
+        /// Timed events that did not fit and are still to come (tomorrow's remainder once tomorrow is shown).
+        public var overflow: Int
+        public var tomorrowShown: Bool
+    }
+
+    /// `slots`: how many 24 pt rows fit; a group label takes one.
+    public static func rows(_ l: DayLayout, slots: Int) -> Result {
+        guard slots > 0 else { return Result(rows: [], overflow: l.today.count + l.tomorrow.count, tomorrowShown: false) }
+        let doneToday = l.hero == nil && l.today.isEmpty
+        if doneToday {
+            guard !l.tomorrow.isEmpty, slots >= 2 else { return Result(rows: [], overflow: l.tomorrow.count, tomorrowShown: false) }
+            let n = min(slots - 1, l.tomorrow.count)
+            return Result(rows: [.label("NEXT \u{00B7} TOMORROW")] + l.tomorrow.prefix(n).map { .event($0) },
+                          overflow: l.tomorrow.count - n, tomorrowShown: true)
+        }
+        if l.today.count >= slots {
+            return Result(rows: l.today.prefix(slots).map { .event($0) }, overflow: l.today.count - slots, tomorrowShown: false)
+        }
+        var rows: [Row] = l.today.map { .event($0) }
+        let free = slots - l.today.count
+        guard free >= 2, !l.tomorrow.isEmpty else { return Result(rows: rows, overflow: 0, tomorrowShown: false) }
+        let n = min(free - 1, l.tomorrow.count)
+        rows.append(.label(l.tomorrowHeader))
+        rows += l.tomorrow.prefix(n).map { .event($0) }
+        return Result(rows: rows, overflow: l.tomorrow.count - n, tomorrowShown: true)
     }
 }
 
@@ -64,8 +199,12 @@ public struct WidgetEntryData: Equatable, Sendable {
     public var content: Content
     /// "Saved 7 h ago" when the last successful sync is old; nil otherwise.
     public var stale: String?
+    /// The day laid out for the v2 widgets; nil when there is nothing to lay out (no accounts).
+    public var layout: DayLayout?
 
-    public init(date: Date, content: Content, stale: String?) { self.date = date; self.content = content; self.stale = stale }
+    public init(date: Date, content: Content, stale: String?, layout: DayLayout? = nil) {
+        self.date = date; self.content = content; self.stale = stale; self.layout = layout
+    }
 
     /// Where a tap on the widget goes.
     public var link: SurfaceLink {
@@ -86,8 +225,11 @@ public struct WidgetInput: Sendable {
     public var paired: Bool
     public var lastSyncAt: Date?
     public var tz: TimeZone
-    public init(items: [AgendaItem], accounts: [Account], paired: Bool = true, lastSyncAt: Date?, tz: TimeZone) {
-        self.items = items; self.accounts = accounts; self.paired = paired; self.lastSyncAt = lastSyncAt; self.tz = tz
+    public var config: WidgetConfig
+    public init(items: [AgendaItem], accounts: [Account], paired: Bool = true, lastSyncAt: Date?, tz: TimeZone,
+                config: WidgetConfig = .default) {
+        self.items = items.filter { config.includes($0.calendarId) }
+        self.accounts = accounts; self.paired = paired; self.lastSyncAt = lastSyncAt; self.tz = tz; self.config = config
     }
 }
 
@@ -119,12 +261,12 @@ public enum TimelineBuilder {
     // MARK: Entry dates
 
     static func relevant(_ input: WidgetInput) -> [AgendaItem] {
-        input.items.filter { isShown($0) }.sorted { ($0.start ?? .distantPast) < ($1.start ?? .distantPast) }
+        input.items.filter { isShown($0, showDeclined: input.config.showDeclined) }.sorted { ($0.start ?? .distantPast) < ($1.start ?? .distantPast) }
     }
 
     /// Timed events that count: not cancelled, not declined.
-    static func isShown(_ i: AgendaItem) -> Bool {
-        !i.allDay && i.start != nil && i.end != nil && i.status != "cancelled" && i.myResponse != "declined"
+    static func isShown(_ i: AgendaItem, showDeclined: Bool = false) -> Bool {
+        !i.allDay && i.start != nil && i.end != nil && i.status != "cancelled" && (showDeclined || i.myResponse != "declined")
     }
 
     public static func entryDates(_ input: WidgetInput, now: Date) -> [Date] {
@@ -152,11 +294,13 @@ public enum TimelineBuilder {
 
     public static func entry(_ input: WidgetInput, at now: Date, format: SurfaceFormat) -> WidgetEntryData {
         let stale = staleText(input.lastSyncAt, now: now)
-        func make(_ c: WidgetEntryData.Content) -> WidgetEntryData { .init(date: now, content: c, stale: stale) }
+        func make(_ c: WidgetEntryData.Content) -> WidgetEntryData {
+            .init(date: now, content: c, stale: stale, layout: input.accounts.isEmpty ? nil : layout(input, at: now, format: format, stale: stale != nil))
+        }
 
         if !input.paired || input.accounts.isEmpty { return make(.noAccounts) }
         if let a = input.accounts.first(where: { $0.statusKind == .needsReauth }) {
-            return make(.needsSignIn(account: a.email.isEmpty ? a.displayName : a.email))
+            return make(.needsSignIn(account: a.displayName.isEmpty ? a.email : a.displayName))
         }
         let shown = relevant(input)
         if shown.isEmpty && !input.items.contains(where: { $0.status != "cancelled" && $0.myResponse != "declined" }) {
@@ -188,6 +332,113 @@ public enum TimelineBuilder {
             relative: relative, rows: Array(rows), remaining: leftToday.count,
             accessibility: "\(first.title), \(format.time(s)), \(live ? relative.replacingOccurrences(of: " \u{00B7} ", with: ", ") : relative)")
         return make(.event(state))
+    }
+
+    // MARK: Day layout
+
+    /// Today's remaining events, tomorrow's events and the all-day line (spec section 1: hidden cancelled and declined,
+    /// in-progress or next event pinned as the hero, status word per row: OVERLAP before REPLY).
+    public static func layout(_ input: WidgetInput, at now: Date, format: SurfaceFormat, stale: Bool = false) -> DayLayout {
+        let today = DayKey(now, in: input.tz)
+        let tomorrow = today.adding(days: 1)
+        let timed = relevant(input).sorted {
+            ($0.start ?? .distantPast, $0.end ?? .distantPast, $0.title) < ($1.start ?? .distantPast, $1.end ?? .distantPast, $1.title)
+        }
+        let todays = timed.filter { i in
+            guard let e = i.end, let s = i.start else { return false }
+            return e > now && DayKey(s, in: input.tz) <= today && DayKey(e.addingTimeInterval(-0.001), in: input.tz) >= today
+        }
+        let tomorrows = timed.filter { i in i.start.map { DayKey($0, in: input.tz) == tomorrow } ?? false }
+
+        func overlaps(_ i: AgendaItem, in day: [AgendaItem]) -> AgendaItem? {
+            guard let s = i.start, let e = i.end else { return nil }
+            return day.first { o in
+                guard o.id != i.id, let os = o.start, let oe = o.end else { return false }
+                return s < oe && os < e
+            }
+        }
+        func row(_ i: AgendaItem, in day: [AgendaItem], plain: Bool) -> WidgetRowData {
+            let s = i.start ?? now
+            var status: String?, kind = WidgetRowData.StatusKind.none
+            var spoken = "\(i.title), \(format.time(s))"
+            if !plain {
+                if let o = overlaps(i, in: day) { status = "OVERLAP"; kind = .needsYou; spoken += ", overlaps \(o.title)" }
+                else if i.myResponse == "needsAction" && i.canRSVP { status = "REPLY"; kind = .needsYou; spoken += ", reply needed" }
+                else if let p = i.prevStart, let m = i.movedAt, now.timeIntervalSince(m) < AgendaItem.movedMemory {
+                    status = "MOVED"; kind = .dim; spoken += ", moved from \(format.time(p))"
+                }
+            }
+            return WidgetRowData(id: i.id, time: format.flipTime(s), title: i.title, status: status, color: i.color,
+                                 live: s <= now, statusKind: kind, spoken: spoken, faded: i.myResponse == "declined")
+        }
+
+        var hero: DayLayout.Hero?
+        var rest = todays
+        if !stale, let first = todays.first(where: { $0.myResponse != "declined" }), let s = first.start, let e = first.end {
+            rest.removeAll { $0.id == first.id }
+            let live = s <= now
+            let needsReply = first.myResponse == "needsAction" && first.canRSVP
+            let words: String
+            if live { words = SurfaceFormat.left(end: e, now: now).uppercased() }
+            else {
+                let mins = Int((s.timeIntervalSince(now) / 60).rounded(.up))
+                words = mins <= 0 ? "NOW" : "IN \(SurfaceFormat.minutesText(mins).uppercased())"
+            }
+            let kind = first.join?.kind
+            let badgeLong = first.join.map { SurfaceFormat.joinLabel($0.kind).uppercased() }
+            hero = .init(id: first.id, title: first.title, time: format.flipTime(s), color: first.color, live: live, start: s, end: e,
+                         sub: needsReply ? "REPLY NEEDED \u{00B7} \(format.time(s))" : words,
+                         badge: kind.map { SurfaceFormat.joinBadge($0) }, badgeLong: badgeLong,
+                         joinURL: first.join.flatMap { URL(string: $0.url) }, needsReply: needsReply,
+                         place: first.location.flatMap { $0.isEmpty ? nil : $0 },
+                         spoken: "\(first.title), \(format.time(s)), \(live ? words.lowercased() : words.lowercased())")
+        }
+        let allDay = input.items.filter { i in
+            guard i.allDay, i.status != "cancelled", i.myResponse != "declined", let d = i.date else { return false }
+            let first = DayKey(d)
+            let last = i.endDate.map { DayKey($0).adding(days: -1) } ?? first
+            return first <= today && today <= last
+        }.map { AllDayChip(title: $0.title, color: $0.color) }
+
+        return DayLayout(header: format.headerDate(now), tomorrowHeader: "TOMORROW \u{00B7} \(format.headerDate(tomorrow.startOfDay(in: input.tz)))",
+                         allDay: allDay, hero: hero,
+                         today: rest.map { row($0, in: todays, plain: stale) },
+                         tomorrow: tomorrows.map { row($0, in: tomorrows, plain: stale) },
+                         todayLeft: todays.count, timeline: timeline(todays, now: now, format: format, heroId: hero?.id))
+    }
+
+    static func timeline(_ events: [AgendaItem], now: Date, format: SurfaceFormat, heroId: String?) -> DayTimeline {
+        let start = Date(timeIntervalSince1970: (now.timeIntervalSince1970 / 900).rounded(.down) * 900)
+        let end = start.addingTimeInterval(DayTimeline.hours * 3600)
+        let inWindow = events.filter { ($0.start ?? .distantPast) < end && ($0.end ?? .distantPast) > start }
+            .sorted { ($0.start ?? .distantPast, $0.end ?? .distantPast) < ($1.start ?? .distantPast, $1.end ?? .distantPast) }
+        // Greedy columns inside each overlap cluster.
+        var blocks: [DayTimeline.Block] = []
+        var cluster: [(item: AgendaItem, col: Int)] = []
+        var clusterEnd = Date.distantPast
+        func flush() {
+            let cols = min((cluster.map(\.col).max() ?? 0) + 1, 3)
+            for c in cluster {
+                guard let s = c.item.start, let e = c.item.end else { continue }
+                blocks.append(.init(id: c.item.id, title: c.item.title, time: format.time(s), color: c.item.color, start: s, end: e,
+                                    column: min(c.col, 2), columns: cols, isNext: c.item.id == heroId))
+            }
+            cluster = []
+        }
+        for i in inWindow {
+            guard let s = i.start, let e = i.end else { continue }
+            if s >= clusterEnd { flush(); clusterEnd = e }
+            else { clusterEnd = max(clusterEnd, e) }
+            let used = Set(cluster.filter { ($0.item.end ?? .distantPast) > s }.map(\.col))
+            cluster.append((i, (0...).first { !used.contains($0) }!))
+        }
+        flush()
+        let hourF = DateFormatter(); hourF.locale = format.locale; hourF.timeZone = format.tz; hourF.dateFormat = "HH"
+        let first = (start.timeIntervalSince1970 / 3600).rounded(.up) * 3600
+        let marks = stride(from: first, to: end.timeIntervalSince1970, by: 3600).map { t -> (at: Date, label: String) in
+            let d = Date(timeIntervalSince1970: t); return (d, hourF.string(from: d))
+        }
+        return DayTimeline(marks: marks, windowStart: start, windowEnd: end, blocks: blocks)
     }
 
     static func followup(_ i: AgendaItem, now: Date, format: SurfaceFormat) -> WidgetEntryData.Followup? {

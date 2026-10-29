@@ -32,6 +32,22 @@ public final class SurfaceFormat: @unchecked Sendable {
         return kept.isEmpty ? s : kept
     }
 
+    /// "TUE 13": the date header of the widgets.
+    public func headerDate(_ d: Date) -> String {
+        let f = DateFormatter(); f.locale = locale; f.timeZone = tz
+        f.setLocalizedDateFormatFromTemplate("EEEd")
+        return f.string(from: d).replacingOccurrences(of: ",", with: "").uppercased()
+    }
+
+    public static func joinBadge(_ kind: String?) -> String {
+        switch kind {
+        case "meet": "MEET"
+        case "zoom": "ZOOM"
+        case "teams": "TEAMS"
+        default: "CALL"
+        }
+    }
+
     public func weekday(_ d: Date) -> String { weekdayF.string(from: d) }
     public func shortDate(_ d: Date) -> String { dayMonthF.string(from: d) }
 
@@ -51,7 +67,7 @@ public final class SurfaceFormat: @unchecked Sendable {
         let m = max(minutes, 0)
         if m < 60 { return "\(m) min" }
         if m >= 48 * 60 { return "\(m / 1440) days" }
-        if m >= 24 * 60 { return m % 1440 == 0 ? "1 day" : "1 day \((m % 1440) / 60) h" }
+        if m >= 24 * 60 { return m % 1440 < 60 ? "1 day" : "1 day \((m % 1440) / 60) h" }
         return m % 60 == 0 ? "\(m / 60) h" : "\(m / 60) h \(m % 60) min"
     }
 
