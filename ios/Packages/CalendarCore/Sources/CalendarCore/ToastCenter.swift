@@ -17,12 +17,13 @@ public final class ToastCenter {
     public private(set) var current: Toast?
     private var clear: Task<Void, Never>?
 
-    public func show(_ message: String, detail: String? = nil, actionTitle: String? = nil, seconds: Double = 6, action: (@MainActor () -> Void)? = nil) {
+    public func show(_ message: String, detail: String? = nil, actionTitle: String? = nil, seconds: Double? = nil, action: (@MainActor () -> Void)? = nil) {
         let t = Toast(message: message, detail: detail, actionTitle: actionTitle, action: action)
         current = t
         clear?.cancel()
         clear = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(seconds))
+            // Short: a plain note 2.5s, one with a button (Undo, Try again) 4s.
+            try? await Task.sleep(for: .seconds(seconds ?? (actionTitle == nil ? 2.5 : 4)))
             if !Task.isCancelled, self?.current?.id == t.id { self?.current = nil }
         }
     }

@@ -48,3 +48,13 @@ func fixture(_ name: String) throws -> Data {
         #expect(a.to.timeIntervalSince(a.from) > 86_000)
     }
 }
+
+@Suite struct QuickAddNullListsTests {
+    /// The hub is Go: empty slices can arrive as null. That used to show "The server returned something unexpected."
+    @Test func nullListsMeanNone() throws {
+        let json = #"{"confidence":0.4,"source":"rules","event":{"calendarId":"","title":"Anne's birthday","when":{"allDay":true,"date":"2026-10-25"},"attendees":null,"recurrence":null,"reminderMin":null},"people":null,"ambiguities":[{"field":"calendarId","question":"Which calendar?","options":null,"default":-1,"optional":false}],"spans":null}"#
+        let d = try APIClient.makeDecoder().decode(QuickAddDraft.self, from: Data(json.utf8))
+        #expect(d.people.isEmpty && d.spans.isEmpty)
+        #expect(d.ambiguities.first?.options.isEmpty == true)
+    }
+}

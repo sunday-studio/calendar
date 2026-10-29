@@ -46,13 +46,20 @@ public struct AgendaItem: Codable, Hashable, Sendable, Identifiable {
     public var canAddConference: Bool
     /// Absent when unknown.
     public var organizer: Person?
+    /// The start before the last sync moved this event, and when that sync saw it (kept 24 h).
+    public var prevStart: Date?
+    public var movedAt: Date?
+
+    /// How long a move is remembered.
+    public static let movedMemory: TimeInterval = 24 * 3600
 
     public init(
         id: String, eventId: String, version: Int64 = 1, calendarId: String, accountId: String, color: String,
         title: String, allDay: Bool, start: Date? = nil, end: Date? = nil, tzid: String? = nil,
         date: String? = nil, endDate: String? = nil, location: String? = nil, join: Join? = nil,
         myResponse: String? = nil, status: String = "confirmed", busy: Bool = true, recurring: Bool = false,
-        canEdit: Bool = false, canRSVP: Bool = false, canAddConference: Bool = false, organizer: Person? = nil
+        canEdit: Bool = false, canRSVP: Bool = false, canAddConference: Bool = false, organizer: Person? = nil,
+        prevStart: Date? = nil, movedAt: Date? = nil
     ) {
         self.id = id; self.eventId = eventId; self.version = version; self.calendarId = calendarId
         self.accountId = accountId; self.color = color; self.title = title; self.allDay = allDay
@@ -60,6 +67,7 @@ public struct AgendaItem: Codable, Hashable, Sendable, Identifiable {
         self.location = location; self.join = join; self.myResponse = myResponse; self.status = status
         self.busy = busy; self.recurring = recurring; self.canEdit = canEdit; self.canRSVP = canRSVP
         self.canAddConference = canAddConference; self.organizer = organizer
+        self.prevStart = prevStart; self.movedAt = movedAt
     }
 }
 

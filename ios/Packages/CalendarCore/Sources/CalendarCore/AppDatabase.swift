@@ -139,6 +139,13 @@ public struct AppDatabase: Sendable {
                 t.add(column: "organizerSelf", .boolean)
             }
         }
+        // v4: "Moved" memory. A sync that changes a timed event's start keeps the old start for 24 h (widgets: MOVED, "Was 11:00").
+        m.registerMigration("v4") { db in
+            try db.alter(table: "occurrence_item") { t in
+                t.add(column: "prevStart", .datetime)
+                t.add(column: "movedAt", .datetime)
+            }
+        }
         return m
     }
 }
@@ -175,6 +182,8 @@ struct OccurrenceRecord: Codable, FetchableRecord, PersistableRecord, Sendable, 
     var organizerEmail: String?
     var organizerName: String?
     var organizerSelf: Bool?
+    var prevStart: Date?
+    var movedAt: Date?
 
     init(_ i: AgendaItem, calendar: Calendar) {
         let r = i.dayRange(calendar: calendar)
@@ -185,6 +194,7 @@ struct OccurrenceRecord: Codable, FetchableRecord, PersistableRecord, Sendable, 
         canEdit = i.canEdit; canRSVP = i.canRSVP; canAddConference = i.canAddConference
         dayStart = r.lowerBound.rawValue; dayEnd = r.upperBound.rawValue
         organizerEmail = i.organizer?.email; organizerName = i.organizer?.name; organizerSelf = i.organizer?.isSelf
+        prevStart = i.prevStart; movedAt = i.movedAt
     }
 
     var item: AgendaItem {
@@ -194,7 +204,8 @@ struct OccurrenceRecord: Codable, FetchableRecord, PersistableRecord, Sendable, 
             location: location, join: joinUrl.map { Join(url: $0, kind: joinKind ?? "other") },
             myResponse: myResponse, status: status, busy: busy, recurring: recurring, canEdit: canEdit,
             canRSVP: canRSVP, canAddConference: canAddConference,
-            organizer: organizerEmail.map { Person(email: $0, name: organizerName, isSelf: organizerSelf) })
+            organizer: organizerEmail.map { Person(email: $0, name: organizerName, isSelf: organizerSelf) },
+            prevStart: prevStart, movedAt: movedAt)
     }
 }
 
@@ -292,8 +303,16 @@ extension AppDatabase {
             let cal = DayKey.calendar(tz)
 
             if let a = snap.agenda {
+                let old = Dictionary(try OccurrenceRecord.fetchAll(db).map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
                 try db.execute(sql: "DELETE FROM occurrence_item")
-                for i in a.items { try OccurrenceRecord(i, calendar: cal).insert(db, onConflict: .replace) }
+                for i in a.items {
+                    var r = OccurrenceRecord(i, calendar: cal)
+                    if let o = old[i.id], !i.allDay, let os = o.start, let ns = i.start {
+                        if abs(os.timeIntervalSince(ns)) >= 1 { r.prevStart = os; r.movedAt = snap.syncedAt }
+                        else if let m = o.movedAt, snap.syncedAt.timeIntervalSince(m) < AgendaItem.movedMemory { r.prevStart = o.prevStart; r.movedAt = m }
+                    }
+                    try r.insert(db, onConflict: .replace)
+                }
                 try db.kvSet(KVKey.lastRev, String(a.rev))
                 try db.kvSet(KVKey.etag, a.etag)
                 try db.kvSet(KVKey.windowFrom, String(Int64(a.from.timeIntervalSince1970)))

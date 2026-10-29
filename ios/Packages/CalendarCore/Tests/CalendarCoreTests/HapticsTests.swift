@@ -13,6 +13,11 @@ import Testing
         #expect(HapticMap.feedback(for: .sheetOpen) == .impact(.soft))
         #expect(HapticMap.feedback(for: .lift) == .impact(.rigid))
         for t in [HapticTrigger.saved, .rsvpSent, .undoRestored] { #expect(HapticMap.feedback(for: t) == .notification(.success)) }
+        for t in [HapticTrigger.drop, .toggle] { #expect(HapticMap.feedback(for: t) == .impact(.light)) }
+        #expect(HapticMap.feedback(for: .removed) == .impact(.rigid))
+        #expect(HapticMap.feedback(for: .refreshDone) == .impact(.soft))
+        #expect(HapticMap.feedback(for: .monthToggle) == .impact(.soft))
+        #expect(HapticMap.feedback(for: .destructive) == .notification(.warning))
         #expect(HapticMap.feedback(for: .conflict) == .notification(.warning))
         #expect(HapticMap.feedback(for: .failure) == .notification(.error))
     }

@@ -33,6 +33,15 @@ public struct DraftAmbiguity: Codable, Hashable, Sendable, Identifiable {
     public init(field: String, question: String, options: [DraftOption] = [], default: Int = -1, optional: Bool = false) {
         self.field = field; self.question = question; self.options = options; self.default = `default`; self.optional = optional
     }
+    private enum Keys: String, CodingKey { case field, question, options, `default`, optional }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self)
+        field = try c.decode(String.self, forKey: .field)
+        question = try c.decodeIfPresent(String.self, forKey: .question) ?? ""
+        options = try c.decodeIfPresent([DraftOption].self, forKey: .options) ?? []   // Go sends null for none
+        `default` = try c.decodeIfPresent(Int.self, forKey: .default) ?? -1
+        optional = try c.decodeIfPresent(Bool.self, forKey: .optional) ?? false
+    }
 }
 
 /// `POST /v1/quick-add` answer. Nothing is written by the hub.
@@ -50,6 +59,20 @@ public struct QuickAddDraft: Codable, Hashable, Sendable {
                 spans: [DraftSpan] = []) {
         self.confidence = confidence; self.source = source; self.degraded = degraded; self.event = event
         self.calendarName = calendarName; self.people = people; self.ambiguities = ambiguities; self.spans = spans
+    }
+
+    /// The hub is Go: an empty list can arrive as `null` or be missing. Both mean "none".
+    private enum Keys: String, CodingKey { case confidence, source, degraded, event, calendarName, people, ambiguities, spans }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Keys.self)
+        confidence = try c.decodeIfPresent(Double.self, forKey: .confidence) ?? 0.5
+        source = try c.decodeIfPresent(String.self, forKey: .source) ?? "rules"
+        degraded = try c.decodeIfPresent(Bool.self, forKey: .degraded)
+        event = try c.decode(EventDraft.self, forKey: .event)
+        calendarName = try c.decodeIfPresent(String.self, forKey: .calendarName)
+        people = try c.decodeIfPresent([DraftPerson].self, forKey: .people) ?? []
+        ambiguities = try c.decodeIfPresent([DraftAmbiguity].self, forKey: .ambiguities) ?? []
+        spans = try c.decodeIfPresent([DraftSpan].self, forKey: .spans) ?? []
     }
 }
 

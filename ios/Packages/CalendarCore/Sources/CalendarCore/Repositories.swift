@@ -170,6 +170,11 @@ public struct GRDBCalendarRepository: CalendarRepository {
     }
 }
 
+public extension AppDatabase {
+    /// The calendars saved on this phone (widget settings list them without a network or an API client).
+    func savedCalendars() throws -> [HubCalendar] { try writer.read(GRDBCalendarRepository.fetch) }
+}
+
 public struct GRDBAccountRepository: AccountRepository {
     let writer: any DatabaseWriter
     public init(db: AppDatabase) { writer = db.writer }

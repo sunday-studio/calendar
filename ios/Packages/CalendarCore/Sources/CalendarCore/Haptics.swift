@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import UIKit
 
 /// Moments in the app that have a feel. Screens say WHAT happened; `HapticMap` decides how it feels.
@@ -12,6 +13,14 @@ public enum HapticTrigger: Sendable, CaseIterable {
     case monthToggle
     /// A dragged block was dropped and the write started.
     case drop
+    /// A switch flipped.
+    case toggle
+    /// Something was removed (event deleted, account removed).
+    case removed
+    /// A confirm sheet for a destructive action appeared.
+    case destructive
+    /// Pull to refresh finished.
+    case refreshDone
     case primaryButton, fab
     case sheetOpen
     /// Long-press lifts an event.
@@ -36,7 +45,10 @@ public enum HapticMap {
         switch t {
         case .snap, .viewSwitch, .dayPage, .monthPick, .rowTap, .today: .selection
         case .monthToggle: .impact(.soft)
-        case .drop: .impact(.light)
+        case .drop, .toggle: .impact(.light)
+        case .removed: .impact(.rigid)
+        case .destructive: .notification(.warning)
+        case .refreshDone: .impact(.soft)
         case .primaryButton, .fab: .impact(.light)
         case .sheetOpen: .impact(.soft)
         case .lift: .impact(.rigid)
@@ -92,5 +104,12 @@ public final class Haptics {
         case .notification(let n):
             notice.notificationOccurred(n == .success ? .success : n == .warning ? .warning : .error); notice.prepare()
         }
+    }
+}
+
+public extension Binding {
+    /// Plays `trigger` whenever the value is set from the UI (switches, pickers).
+    func haptic(_ trigger: HapticTrigger = .toggle) -> Binding<Value> {
+        Binding(get: { wrappedValue }, set: { wrappedValue = $0; MainActor.assumeIsolated { Haptics.shared.play(trigger) } })
     }
 }
