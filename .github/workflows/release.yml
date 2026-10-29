@@ -83,7 +83,7 @@ jobs:
 
       # semver patterns only fire on tags. A pre-release tag (v1.0.0-rc.1) gets only its full version, never X.Y or latest.
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ steps.name.outputs.image }}
           flavor: |
