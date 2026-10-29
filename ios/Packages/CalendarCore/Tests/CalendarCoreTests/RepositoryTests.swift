@@ -108,6 +108,19 @@ import Testing
         #expect(cals.map(\.id) == ["c1"])
     }
 
+    @Test func syncAndRefreshAsksTheHubToPollFirst() async throws {
+        let hub = FakeHub()
+        let db = try AppDatabase.inMemory()
+        let repo = GRDBEventDetailRepository(db: db, api: hub, clock: .fixed(iso("2026-10-11T10:00:00Z")), settle: [.milliseconds(1), .milliseconds(1)])
+        _ = try await repo.detail(id: "e1:5")
+        let d = try await repo.syncAndRefresh(id: "e1:5")
+        #expect(d.item.id == "e1:5")
+        #expect(hub.postSyncCalls == 1)
+        // The hub being unreachable still falls back to a plain read error, not a hang.
+        hub.failure = APIClientError.transport("down")
+        do { _ = try await repo.syncAndRefresh(id: "e1:5"); Issue.record("should throw") } catch {}
+    }
+
     @Test func eventDetailIsCacheFirstAndInvalidatedByVersion() async throws {
         let hub = FakeHub()
         let db = try AppDatabase.inMemory()

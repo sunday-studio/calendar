@@ -57,6 +57,12 @@ public protocol EventDetailRepository: Sendable {
     func detail(id: String) async throws -> EventDetail
     /// Always fetch and cache.
     func refresh(id: String) async throws -> EventDetail
+    /// Pull to refresh on the detail page: ask the hub to poll the event's account, then fetch until the hub's copy changes.
+    func syncAndRefresh(id: String) async throws -> EventDetail
+}
+
+public extension EventDetailRepository {
+    func syncAndRefresh(id: String) async throws -> EventDetail { try await refresh(id: id) }
 }
 
 // MARK: - GRDB implementations
@@ -222,8 +228,11 @@ public struct GRDBEventDetailRepository: EventDetailRepository {
     let writer: any DatabaseWriter
     let api: any HubReadAPI
     let clock: AppClock
-    public init(db: AppDatabase, api: any HubReadAPI, clock: AppClock = .system) {
-        writer = db.writer; self.api = api; self.clock = clock
+    /// Waits between fetches after asking the hub to sync (the hub answers `POST /v1/sync` at once and polls Google in the background).
+    let settle: [Duration]
+    public init(db: AppDatabase, api: any HubReadAPI, clock: AppClock = .system,
+                settle: [Duration] = [.milliseconds(800), .milliseconds(1500), .milliseconds(2500)]) {
+        writer = db.writer; self.api = api; self.clock = clock; self.settle = settle
     }
 
     public func cached(id: String) async throws -> EventDetail? {
@@ -236,6 +245,20 @@ public struct GRDBEventDetailRepository: EventDetailRepository {
     public func detail(id: String) async throws -> EventDetail {
         if let c = try await cached(id: id) { return c }
         return try await refresh(id: id)
+    }
+
+    public func syncAndRefresh(id: String) async throws -> EventDetail {
+        let before = try await writer.read { try EventDetailRecord.fetchOne($0, key: id)?.json }
+        let accountId = before.flatMap { try? JSONDecoder.cache.decode(EventDetail.self, from: $0) }?.item.accountId
+        guard (try? await api.postSync(accountId: accountId)) != nil else { return try await refresh(id: id) }
+        var latest = try await refresh(id: id)
+        guard let before else { return latest }
+        for wait in settle {
+            if try JSONEncoder.cache.encode(latest) != before { break }
+            try await Task.sleep(for: wait)
+            latest = try await refresh(id: id)
+        }
+        return latest
     }
 
     public func refresh(id: String) async throws -> EventDetail {

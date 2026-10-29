@@ -168,7 +168,7 @@ public final class EventDetailViewModel {
         isRefreshing = true
         defer { isRefreshing = false }
         do {
-            let d = try await repo.refresh(id: id)
+            let d = try await repo.syncAndRefresh(id: id)
             detail = d; phase = .loaded; refreshFailed = false
         } catch {
             if detail != nil { refreshFailed = true }
