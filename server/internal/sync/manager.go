@@ -323,6 +323,10 @@ func (m *Manager) runWorker(ctx context.Context, w *worker) {
 	}
 	tk := time.NewTicker(dur(m.Poll, 2*time.Second))
 	defer tk.Stop()
+	// After a good pass the next one is due a cadence after it ended. The cadence depends on whether a client is
+	// connected, and phones reconnect often, so it is re-read on every wake instead of fixed when the pass ends.
+	var okAt time.Time
+	var okProv string
 	for {
 		var trig Trigger
 		select {
@@ -330,6 +334,9 @@ func (m *Manager) runWorker(ctx context.Context, w *worker) {
 			return
 		case trig = <-w.trig:
 		case <-tk.C:
+			if !okAt.IsZero() {
+				due = okAt.Add(m.cadenceFor(okProv))
+			}
 			if m.now().Before(due) {
 				continue
 			}
@@ -353,9 +360,11 @@ func (m *Manager) runWorker(ctx context.Context, w *worker) {
 			if errors.Is(err, provider.ErrNeedsReauth) {
 				return
 			}
+			okAt = time.Time{}
 			due = m.now().Add(retry)
 		} else {
-			due = m.now().Add(m.cadenceFor(a.Provider))
+			okAt, okProv = m.now(), a.Provider
+			due = okAt.Add(m.cadenceFor(okProv))
 		}
 	}
 }

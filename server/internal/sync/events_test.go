@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	gosync "sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -89,4 +90,29 @@ func TestPruneRuns(t *testing.T) {
 	if c := e.count(`SELECT COUNT(*) FROM sync_runs`); c != 2 {
 		t.Fatal(c)
 	}
+}
+
+// A client connecting after a pass ended must shorten the wait for the next pass: the cadence is read on every wake,
+// not fixed when the pass ends (phones reconnect often, and a pass that ended while none was connected used to be
+// followed by a full Slow wait).
+func TestCadenceIsReadOnEveryWake(t *testing.T) {
+	e := newTEnv(t)
+	seedCal(e)
+	e.addAccount("a@x.com", "rt-a")
+	var clients atomic.Int32
+	e.mgr.Fast, e.mgr.Slow = 150*time.Millisecond, time.Hour
+	e.mgr.SSEClients = func() int { return int(clients.Load()) }
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	defer func() { cancel(); <-done }()
+	go func() { e.mgr.Run(ctx); close(done) }()
+	ticks := func() int { return e.count(`SELECT COUNT(*) FROM sync_runs WHERE calendar_id IS NULL`) }
+	waitFor(t, func() bool { return ticks() >= 1 })
+	n := ticks()
+	time.Sleep(400 * time.Millisecond)
+	if ticks() != n {
+		t.Fatal("polled again with no client connected and an hour-long Slow cadence")
+	}
+	clients.Store(1)
+	waitFor(t, func() bool { return ticks() > n })
 }
