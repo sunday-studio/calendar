@@ -60,7 +60,7 @@ struct ServerScreen: View {
         }
         .overlay(alignment: .bottom) {
             if let t = toast {
-                ToastView(t).padding(.bottom, 96).task { try? await Task.sleep(for: .seconds(3)); toast = nil }
+                ToastView(t).padding(.bottom, 96).task { try? await Task.sleep(for: .seconds(2)); toast = nil }
             }
         }
         .task { await model.refresh() }

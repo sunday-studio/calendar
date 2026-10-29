@@ -23,7 +23,7 @@ public struct AccountsScreen: View {
         VStack(spacing: 0) {
             ScreenNav("Accounts", leading: .back, trailing: "Add", onLeading: { dismiss() }, onTrailing: { showAdd = true })
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) { content }
+                VStack(alignment: .leading, spacing: 0) { content }.padding(.top, Spacing.l)   // canvas a-list: 16 under the nav
             }
             .refreshable { await model.load() }
         }
@@ -104,7 +104,7 @@ extension View {
                 ToastView(t)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .task(id: t) {
-                        try? await Task.sleep(for: .seconds(3))
+                        try? await Task.sleep(for: .seconds(2))
                         text.wrappedValue = nil
                     }
             }
@@ -299,9 +299,6 @@ struct AccountDetailView: View {
                         Spacer(minLength: 0)
                     }
                     .padding(.horizontal, Spacing.gutter).padding(.top, Spacing.s)
-                    Text(a.email).font(CalFont.sub).foregroundStyle(Color.calInk2)
-                        .padding(.horizontal, Spacing.gutter).padding(.top, Spacing.s)
-
                     if a.statusKind == .needsReauth {
                         AmberBanner(a.email, message: "needs you to sign in again.", actionTitle: "Fix") { reconnect = signIn() }
                             .padding(.top, Spacing.l)
@@ -318,13 +315,13 @@ struct AccountDetailView: View {
                     } else {
                         ForEach(Array(model.calendars.enumerated()), id: \.element.id) { n, c in
                             ListRow(c.name, sub: c.isPrimary ? "Default for new events" : nil, color: nil,
-                                    height: Spacing.rowHeight, isFirst: n == 0) { EmptyView() }
+                                    height: 60, isFirst: n == 0) { CalGlyph(.forward, size: 14).foregroundStyle(Color.calInk2) }
                         }
                     }
 
                     Text("Sync").calLabel().padding(.horizontal, Spacing.gutter).padding(.top, 32).padding(.bottom, 10)
-                    KeyValueRow("Last sync", StatusWords.lastSync(a).replacingOccurrences(of: "Synced ", with: ""))
-                    if let d = a.statusDetail, !d.isEmpty { KeyValueRow("Detail", d, isError: a.statusKind == .error) }
+                    KeyValueRow("Last good sync", StatusWords.lastSync(a).replacingOccurrences(of: "Synced ", with: ""))
+                    if let d = a.statusDetail, !d.isEmpty { KeyValueRow("Last error", d, isError: a.statusKind == .error) }
 
                     if let e = model.errorMessage {
                         Text(e).font(CalFont.sub).foregroundStyle(Color.calRed)
@@ -339,7 +336,7 @@ struct AccountDetailView: View {
         .safeAreaInset(edge: .bottom) {
             FooterBar {
                 CalButton("Sign in again", kind: .outline) { reconnect = signIn() }.accessibilityIdentifier("detail.reconnect")
-                CalButton("Remove account", kind: .danger) { confirmRemove = true }
+                CalButton("Remove account", kind: .danger) { confirmRemove = true; Haptics.shared.play(.destructive) }
                     .accessibilityIdentifier("detail.remove").disabled(model.busy)
             }
         }
@@ -361,11 +358,14 @@ struct AccountDetailView: View {
         .presentationCornerRadius(0)
         .presentationDragIndicator(.hidden)
         }
-        .confirmationDialog("Remove \(a.email)?", isPresented: $confirmRemove, titleVisibility: .visible) {
-            Button("Remove account", role: .destructive) { Task { await model.remove() } }
-            Button("Keep it", role: .cancel) {}
-        } message: {
-            Text("Its calendars and events disappear from this app and from your server, and the saved sign-in is deleted. Nothing changes in Google. You can add it again later.")
+        .calSheet(isPresented: $confirmRemove) {
+            CalSheet(title: "Remove \(a.email)?", message: "Its calendars and events disappear from this app and from your server, and the saved sign-in is deleted. Nothing changes in Google. You can add it again later.") {
+                VStack(spacing: 10) {
+                    CalButton("Remove account", kind: .danger) { confirmRemove = false; Haptics.shared.play(.removed); Task { await model.remove() } }
+                    CalButton("Keep it", kind: .outline) { confirmRemove = false }
+                }
+                .padding(.horizontal, Spacing.gutter)
+            }
         }
         .toastOverlay($model.toast)
     }
@@ -384,13 +384,14 @@ struct AccountDetailView: View {
     }
 
     private var colourPicker: some View {
-        HStack(spacing: Spacing.xs) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: Spacing.hit, maximum: Spacing.hit), spacing: 10)], alignment: .leading, spacing: 10) {
             ForEach(AccountColor.allCases) { c in
                 let selected = c.rawValue == model.account.color
                 Button { Task { await model.setColor(c.rawValue) } } label: {
-                    Rectangle().fill(c.color).frame(width: 36, height: 36)
-                        .overlay(Rectangle().strokeBorder(Color.calInk, lineWidth: selected ? 1 : 0).padding(-4))
-                        .frame(width: Spacing.hit, height: Spacing.hit)
+                    // canvas: 44 squares, gap 10; selected = 2pt bg gap + 1pt ink ring
+                    Rectangle().fill(c.color).frame(width: Spacing.hit, height: Spacing.hit)
+                        .overlay(Rectangle().strokeBorder(Color.calBg, lineWidth: selected ? 2 : 0))
+                        .overlay(Rectangle().strokeBorder(Color.calInk, lineWidth: selected ? 1 : 0).padding(-3))
                 }
                 .accessibilityLabel(c.rawValue.capitalized)
                 .accessibilityAddTraits(selected ? .isSelected : [])

@@ -83,11 +83,11 @@ public final class SystemSpeechTranscriber: SpeechTranscribing {
     public func requestAccess() async -> SpeechAccess {
         guard let recognizer, recognizer.supportsOnDeviceRecognition else { return .unavailable }
         let speech: SFSpeechRecognizerAuthorizationStatus = await withCheckedContinuation { c in
-            SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0) }
+            SFSpeechRecognizer.requestAuthorization { @Sendable in c.resume(returning: $0) }
         }
         guard speech == .authorized else { return .denied }
         let mic: Bool = await withCheckedContinuation { c in
-            AVAudioApplication.requestRecordPermission { c.resume(returning: $0) }
+            AVAudioApplication.requestRecordPermission { @Sendable in c.resume(returning: $0) }
         }
         return mic ? .ready : .denied
     }
@@ -107,11 +107,11 @@ public final class SystemSpeechTranscriber: SpeechTranscribing {
         let input = audio.inputNode
         let format = input.outputFormat(forBus: 0)
         let sink = Sink(request: req, update: update)
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in sink.feed(buffer) }
+        input.installTap(onBus: 0, bufferSize: 1024, format: format) { @Sendable buffer, _ in sink.feed(buffer) }
         audio.prepare()
         try audio.start()
 
-        task = recognizer.recognitionTask(with: req) { result, _ in
+        task = recognizer.recognitionTask(with: req) { @Sendable result, _ in
             if let text = result?.bestTranscription.formattedString { sink.words(text) }
         }
     }

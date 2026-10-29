@@ -62,7 +62,8 @@ public struct EventDetailView: View {
         .calSheet(isPresented: $showJoin) { joinSheet }
         .calSheet(isPresented: Binding(get: { replyStep != nil }, set: { if !$0 { replyStep = nil } })) { replySheet }
         .overlay(alignment: .bottom) {
-            if let t = toast { ToastView(t, actionTitle: "OK") { toast = nil }.padding(.bottom, 60) }
+            if let t = toast { ToastView(t, actionTitle: "OK") { toast = nil }.padding(.bottom, 60)
+                .task(id: t) { try? await Task.sleep(for: .seconds(2.5)); toast = nil } }
         }
         .task { await model.load() }
         .accessibilityIdentifier("event.detail")
@@ -309,7 +310,7 @@ public struct EventDetailView: View {
                 Haptics.shared.play(.rsvpSent)
                 changingReply = false
                 let word = r == .accepted ? "yes" : r == .tentative ? "maybe" : "no"
-                ToastCenter.shared.show("You said \(word) to \(title)", actionTitle: "Undo", seconds: 6) {
+                ToastCenter.shared.show("You said \(word) to \(title)", actionTitle: "Undo", seconds: 4) {
                     if let prev = previous, let back = Self.response(for: prev) { Task { if await model.reply(back, note: nil, scope: scope, writer: writer) { Haptics.shared.play(.undoRestored) } } }
                 }
             }
@@ -326,8 +327,8 @@ public struct EventDetailView: View {
         Task {
             switch await writer.delete(item, scope: scope, key: nil, mode: .confirmed) {
             case .saved:
-                Haptics.shared.play(.saved)
-                ToastCenter.shared.show("\(item.title) deleted", actionTitle: "Undo", seconds: 6) {
+                Haptics.shared.play(.removed)
+                ToastCenter.shared.show("\(item.title) deleted", actionTitle: "Undo", seconds: 4) {
                     if let draft { Task { if case .saved = await writer.create(draft, key: nil, mode: .confirmed) { Haptics.shared.play(.undoRestored) } } }
                 }
                 dismiss()

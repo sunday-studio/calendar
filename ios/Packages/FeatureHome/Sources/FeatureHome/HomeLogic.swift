@@ -344,6 +344,18 @@ public enum HomeLogic {
         }
     }
 
+    /// "Can't reach Google. Its events may be out of date." for accounts the hub could not sync (status error).
+    public static func errorBanner(_ accounts: [Account]) -> BannerText? {
+        let bad = accounts.filter { $0.statusKind == .error }
+        func provider(_ a: Account) -> String { a.provider == "google" ? "Google" : a.provider == "ics" ? "a calendar link" : a.provider.capitalized }
+        switch bad.count {
+        case 0: return nil
+        case 1: return BannerText(title: "Can\u{2019}t reach \(provider(bad[0])).",
+                                  message: "\(bad[0].displayName.isEmpty ? bad[0].email : bad[0].displayName) may be out of date.")
+        default: return BannerText(title: "Can\u{2019}t reach \(bad.count) accounts.", message: "Their events may be out of date.")
+        }
+    }
+
     /// "from 10:19" same day, "from yesterday 21:40", else "from Sat 10 Oct".
     public static func ageText(_ date: Date, now: Date, format: HomeFormat) -> String {
         let d = DayKey(date, in: format.tz), today = DayKey(now, in: format.tz)

@@ -8,6 +8,17 @@ public enum HomeMode: Int, CaseIterable, Sendable {
     static let titles = ["Agenda", "Day", "3 days"]
 }
 
+/// What the New sheet opens with.
+public enum NewEntry: Equatable, Sendable {
+    /// Quick add.
+    case blank
+    /// The full form at this start (long-press on an empty hour).
+    case at(Date)
+    /// The draft kept by "Keep as draft".
+    case draft
+    public var start: Date? { if case .at(let d) = self { d } else { nil } }
+}
+
 /// Typed navigation for the single `NavigationStack` (no tab bar).
 public enum HomeRoute: Hashable, Sendable {
     case event(String)
@@ -21,6 +32,8 @@ public enum HomeLink: Equatable, Sendable {
     case today
     case event(String)
     case accounts
+    /// `calendar://new`: the new-event sheet.
+    case newEvent
 }
 
 /// The app sets `pending`; `HomeRoot` consumes it (also when it was set before Home existed, e.g. cold launch).
@@ -37,7 +50,7 @@ public struct HomeRoot<AccountsScreen: View, EventScreen: View, SettingsScreen: 
     @State private var showNew = false
     @Namespace private var zoomNS
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var newStart: Date?
+    @State private var newEntry: NewEntry = .blank
     @State private var day: DayViewModel
     @AppStorage("home.mode") private var modeRaw = HomeMode.agenda.rawValue
     @AppStorage(DisplayPrefs.Key.flipAnimation) private var prefFlip = true
@@ -47,7 +60,8 @@ public struct HomeRoot<AccountsScreen: View, EventScreen: View, SettingsScreen: 
     private let accountsScreen: () -> AccountsScreen
     private let eventScreen: (String) -> EventScreen
     private let settingsScreen: (@escaping () -> Void) -> SettingsScreen
-    private let newScreen: (Date?, @escaping () -> Void) -> NewScreen
+    private let newScreen: (NewEntry, @escaping () -> Void) -> NewScreen
+    private var draftTitle: (() -> String?)?
     private let onForget: () -> Void
     private var moveEvent: ((AgendaItem, EventWhen, EventScope) async -> WriteOutcome)?
     private var navigator: HomeNavigator?
@@ -57,7 +71,7 @@ public struct HomeRoot<AccountsScreen: View, EventScreen: View, SettingsScreen: 
                 @ViewBuilder accounts: @escaping () -> AccountsScreen,
                 @ViewBuilder event: @escaping (String) -> EventScreen,
                 @ViewBuilder settings: @escaping (@escaping () -> Void) -> SettingsScreen,
-                @ViewBuilder new: @escaping (Date?, @escaping () -> Void) -> NewScreen) {
+                @ViewBuilder new: @escaping (NewEntry, @escaping () -> Void) -> NewScreen) {
         _model = State(initialValue: HomeViewModel(deps: HomeDependencies(env: env)))
         _day = State(initialValue: DayViewModel(agenda: env.agenda, settings: env.settings, clock: env.clock))
         _path = State(initialValue: startOnAccounts ? [.accounts] : startOnSettings ? [.settings] : [])
@@ -76,6 +90,11 @@ public struct HomeRoot<AccountsScreen: View, EventScreen: View, SettingsScreen: 
     /// Search (f-open): the app supplies the screen; Home pushes it from the header glyph and opens the tapped event.
     public func search(_ screen: @escaping (_ openEvent: @escaping (String) -> Void, _ close: @escaping () -> Void) -> AnyView) -> Self {
         var copy = self; copy.searchScreen = screen; return copy
+    }
+
+    /// The saved "Keep as draft" event, if any: Home lists it as a row. `title` is "" for an untitled draft.
+    public func draft(_ title: @escaping () -> String?) -> Self {
+        var copy = self; copy.draftTitle = title; return copy
     }
 
     /// Lets the app steer Home from widget / notification links.
@@ -97,6 +116,7 @@ public struct HomeRoot<AccountsScreen: View, EventScreen: View, SettingsScreen: 
         case .today: path = []
         case .event(let id): path = [.event(id)]
         case .accounts: path = [.accounts]
+        case .newEvent: path = []; newEntry = .blank; showNew = true
         }
     }
 
@@ -106,11 +126,12 @@ public struct HomeRoot<AccountsScreen: View, EventScreen: View, SettingsScreen: 
                      openEvent: { path.append(.event($0)) }, openAccounts: { path.append(.accounts) },
                      openSettings: { path.append(.settings) },
                      openSearch: searchScreen == nil ? nil : { path.append(.search) },
-                     newEventAt: { newStart = $0; showNew = true }, forget: onForget, moveEvent: moveEvent, zoomNS: zoomNS)
+                     newEventAt: { newEntry = $0.map(NewEntry.at) ?? .blank; showNew = true },
+                     draft: draftTitle?(), openDraft: { newEntry = .draft; showNew = true }, forget: onForget, moveEvent: moveEvent, zoomNS: zoomNS)
                 .task { await day.run() }
                 .navigationDestination(for: HomeRoute.self) { route in
                     switch route {
-                    case .event(let id): eventScreen(id).zoomDestination(id, in: zoomNS, enabled: !reduceMotion)
+                    case .event(let id): eventScreen(id)
                     case .accounts: accountsScreen()
                     case .settings: settingsScreen { path.append(.accounts) }
                     case .search:
@@ -119,9 +140,8 @@ public struct HomeRoot<AccountsScreen: View, EventScreen: View, SettingsScreen: 
                 }
         }
         .sheet(isPresented: $showNew) {
-            newScreen(newStart) { showNew = false }
+            newScreen(newEntry) { showNew = false }
                 .presentationDetents([.large])
-                .zoomDestination("fab", in: zoomNS, enabled: !reduceMotion && newStart == nil)
         }
         .overlay(alignment: .bottom) {
             if let t = ToastCenter.shared.current {

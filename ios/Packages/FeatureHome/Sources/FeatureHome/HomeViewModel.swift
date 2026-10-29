@@ -163,6 +163,7 @@ public final class HomeViewModel {
     public func inviteWhen(_ i: AgendaItem) -> (column: String, sub: String) { HomeLogic.inviteWhen(i, now: now, tz: tz, format: format) }
 
     public var signInBanner: HomeLogic.BannerText? { HomeLogic.signInBanner(accounts) }
+    public var errorBanner: HomeLogic.BannerText? { HomeLogic.errorBanner(accounts) }
     public var connectionBanner: HomeLogic.ConnectionBanner? {
         HomeLogic.connectionBanner(state: syncState, lastSyncAt: lastSyncAt, isOnline: isOnline, now: now, format: format)
     }

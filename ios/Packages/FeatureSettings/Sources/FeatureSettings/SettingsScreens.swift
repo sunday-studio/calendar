@@ -122,6 +122,8 @@ public struct SettingsScreen: View {
     let env: AppEnvironment
     let openAccounts: () -> Void
     let tokensAPI: (any HubTokensAPI)?
+    let onLogOut: (() -> Void)?
+    @State private var confirmLogOut = false
     @State private var settings: SettingsViewModel
     @State private var calendars: CalendarsViewModel
     @State private var status: StatusViewModel
@@ -129,8 +131,8 @@ public struct SettingsScreen: View {
     @State private var syncState: SyncState = .idle
     @State private var needsSignIn = false
 
-    public init(env: AppEnvironment, tokens: (any HubTokensAPI)? = nil, openAccounts: @escaping () -> Void) {
-        self.env = env; self.openAccounts = openAccounts; self.tokensAPI = tokens
+    public init(env: AppEnvironment, tokens: (any HubTokensAPI)? = nil, openAccounts: @escaping () -> Void, onLogOut: (() -> Void)? = nil) {
+        self.env = env; self.openAccounts = openAccounts; self.tokensAPI = tokens; self.onLogOut = onLogOut
         _settings = State(initialValue: SettingsViewModel(deps: .init(env: env)))
         _calendars = State(initialValue: CalendarsViewModel(deps: .init(env: env)))
         _status = State(initialValue: StatusViewModel(deps: .init(env: env)))
@@ -168,6 +170,22 @@ public struct SettingsScreen: View {
             }.buttonStyle(.plain)
             if tokensAPI != nil {
                 SettingsLink(.tokens) { NavRow("API tokens", sub: "Phones and scripts") }
+            }
+            if onLogOut != nil {
+                Button { Haptics.shared.play(.destructive); confirmLogOut = true } label: {
+                    SettingsRow("Log out", sub: "Pair this phone again to come back") { EmptyView() }
+                        .foregroundStyle(Color.calRed)
+                }
+                .buttonStyle(.plain).accessibilityIdentifier("settings.logout")
+            }
+        }
+        .calSheet(isPresented: $confirmLogOut) {
+            CalSheet(title: "Log out of \(host)?", message: "This phone stops showing your calendars until you pair it again. Nothing is deleted on the server.") {
+                VStack(spacing: 10) {
+                    CalButton("Log out", kind: .danger) { confirmLogOut = false; Haptics.shared.play(.removed); onLogOut?() }
+                    CalButton("Stay logged in", kind: .outline) { confirmLogOut = false }
+                }
+                .padding(.horizontal, Spacing.gutter)
             }
         }
         .environment(\.settingsContext, SettingsContext(env: env, openAccounts: openAccounts, settings: settings, calendars: calendars, status: status, tokens: tokensAPI))
@@ -287,7 +305,11 @@ struct ColourScreen: View {
                 .accessibilityHidden(true)
             ToggleRow("Use the account colour", isOn: Binding(
                 get: { calendar?.colorOverride == nil },
-                set: { on in if on { Task { await model.setColor(calendarID, nil) } } }))
+                set: { on in
+                    // On: follow the account again. Off: keep today's colour as an explicit pick, which the swatches above then change.
+                    if on { Task { await model.setColor(calendarID, nil) } }
+                    else if let c = calendar { Task { await model.setColor(calendarID, AccountColor(key: c.color)) } }
+                }))
         }
     }
 }
@@ -309,7 +331,7 @@ struct DefaultCalendarScreen: View {
                         } label: {
                             HStack(spacing: Spacing.l) {
                                 Rectangle().fill(AccountColor(key: CalendarsViewModel.colorKey(c)).color).frame(width: 14, height: 14)
-                                Text(c.name).font(CalFont.heading).foregroundStyle(Color.calInk)
+                                Text(c.name).font(CalFont.heading).foregroundStyle(Color.calInk).lineLimit(1).truncationMode(.tail)
                                 Spacer(minLength: 0)
                                 RadioMark(isOn: model.draft.defaultCalendarId == c.id)
                             }
@@ -338,8 +360,16 @@ struct TimeZonesScreen: View {
     var body: some View {
         SettingsPage(title: "Time zones") {
             GroupLabel("Main", first: true)
-            SettingsRow(SettingsLogic.city(main), sub: "Follows this phone", isFirst: true) {
+            SettingsRow(SettingsLogic.city(main), sub: main.identifier == TimeZone.current.identifier ? "Follows this phone" : "Set on your server", isFirst: true) {
                 Text(main.abbreviation() ?? "").font(CalFont.status).foregroundStyle(Color.calInk2)
+            }
+            if main.identifier != TimeZone.current.identifier {
+                SettingsRow("Use this phone\u{2019}s zone", sub: SettingsLogic.city(.current)) {
+                    Text(TimeZone.current.abbreviation() ?? "").font(CalFont.status).foregroundStyle(Color.calInk2)
+                }
+                .contentShape(Rectangle())
+                .onTapGesture { model.draft.userTzid = TimeZone.current.identifier; Task { await model.save() } }
+                .accessibilityAddTraits(.isButton)
             }
             GroupLabel("Second column")
             ToggleRow("Show a second time zone", isOn: Binding(
@@ -510,10 +540,10 @@ struct AlertsScreen: View {
                 }
             }
             GroupLabel("Also tell me")
-            ToggleRow("Join button on the alert", sub: "When an event has a call link", isOn: $joinButton, isFirst: true)
-            ToggleRow("When an event moves or is cancelled", isOn: $moved)
-            ToggleRow("When an account needs sign in", isOn: $signIn)
-            ToggleRow("New invitations", isOn: $invitations)
+            ToggleRow("Join button on the alert", sub: "When an event has a call link", isOn: $joinButton.haptic(), isFirst: true)
+            ToggleRow("When an event moves or is cancelled", isOn: $moved.haptic())
+            ToggleRow("When an account needs sign in", isOn: $signIn.haptic())
+            ToggleRow("New invitations", isOn: $invitations.haptic())
             Hint("Alerts are scheduled on this phone from your saved agenda, so they still arrive offline. Switched-off kinds arrive quietly, without sound.")
         }
         .task { permission = await AlertPermission.status() }
@@ -537,15 +567,15 @@ struct AppearanceScreen: View {
                 get: { themes.firstIndex(of: theme) ?? 0 }, set: { theme = themes[$0] }))
                 .padding(.horizontal, Spacing.gutter)
             GroupLabel("Feel")
-            ToggleRow("Haptics", sub: "Taps and ticks on snaps, saves and replies", isOn: $haptics, isFirst: true)
+            ToggleRow("Haptics", sub: "Taps and ticks on snaps, saves and replies", isOn: $haptics.haptic(), isFirst: true)
             GroupLabel("Flip cells")
-            ToggleRow("Animate changes", sub: "Cells flip when a time changes", isOn: $flip, isFirst: true)
+            ToggleRow("Animate changes", sub: "Cells flip when a time changes", isOn: $flip.haptic(), isFirst: true)
             SettingsRow("Reduce motion", sub: "Follows the phone setting") {
                 Text(reduceMotion ? "On" : "Off").font(CalFont.status).foregroundStyle(Color.calInk2)
             }
             GroupLabel("Agenda")
-            ToggleRow("Show declined events", isOn: $declined, isFirst: true)
-            ToggleRow("Show week numbers", isOn: $weekNumbers)
+            ToggleRow("Show declined events", isOn: $declined.haptic(), isFirst: true)
+            ToggleRow("Show week numbers", isOn: $weekNumbers.haptic())
             ToggleRow("24 hour time", isOn: $time24)
         }
     }

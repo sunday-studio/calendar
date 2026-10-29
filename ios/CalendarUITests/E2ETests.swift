@@ -93,7 +93,7 @@ final class E2ETests: XCTestCase {
             XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Next:")).firstMatch.exists, "done card names the next event")
         }
         for t in ["Design review", "Planning", "Quarterly sync", "Standup (moved)", "Team offsite"] { XCTAssertTrue(waitRow(t, 20), "missing \(t)") }
-        app.buttons["home.today"].tap()
+        goToToday()
         shot("home")
     }
 
@@ -117,7 +117,7 @@ final class E2ETests: XCTestCase {
         }
         tap(app.buttons["home.viewSelect"], "view select")
         tap(app.buttons["Agenda"], "Agenda")
-        tap(app.buttons["home.today"], "today")
+        goToToday()
     }
 
     private func closeDetail() {
@@ -396,7 +396,7 @@ final class E2ETests: XCTestCase {
     private func waitRow(_ title: String, _ timeout: TimeInterval) -> Bool {
         let end = Date().addingTimeInterval(timeout)
         if row(title).waitForExistence(timeout: 2) { return true }
-        if app.buttons["home.today"].exists { app.buttons["home.today"].tap() }   // back to the top of the agenda
+        if app.buttons["home.today"].exists { goToToday() }   // back to the top of the agenda
         if row(title).waitForExistence(timeout: 3) { return true }
         // Drag less than a screen at a time so no row is skipped.
         func drag(up: Bool) {
@@ -479,6 +479,12 @@ final class E2ETests: XCTestCase {
         if !only.isEmpty, !name.hasPrefix("pair"), !only.contains(where: { name.contains($0) }) { return }
         print("E2E step: \(name)")
         try body()
+    }
+
+    /// The date button opens the Calendar menu; its first row jumps to today.
+    private func goToToday() {
+        tap(app.buttons["home.today"], "date button")
+        tap(app.buttons["Go to today"], "Go to today")
     }
 
     private func tap(_ el: XCUIElement, _ what: String, timeout: TimeInterval = 15) {

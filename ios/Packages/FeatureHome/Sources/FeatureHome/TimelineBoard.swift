@@ -54,6 +54,7 @@ struct TimelineBoard: View {
     @State private var nudging: DayBlock?
     @State private var position = ScrollPosition(y: 0)
     @State private var placedFor: DayKey?
+    @State private var allDayExpanded = false
 
     private var tz: TimeZone { model.tz }
     private var first: DayKey { days[0] }
@@ -115,8 +116,10 @@ struct TimelineBoard: View {
     @ViewBuilder private var allDayStrip: some View {
         let items = model.content(for: first).allDay
         if !items.isEmpty {
+            // Two rows at most until asked: five all-day events used to push the hours off the screen.
+            let shown = allDayExpanded || items.count <= 3 ? items : Array(items.prefix(2))
             VStack(spacing: 0) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { n, i in
+                ForEach(Array(shown.enumerated()), id: \.element.id) { n, i in
                     Button { openEvent(i.id) } label: {
                         HStack(spacing: 0) {
                             Text("All day").font(CalFont.time).foregroundStyle(Color.calInk2).lineLimit(1)
@@ -135,6 +138,17 @@ struct TimelineBoard: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(i.title), all day")
+                }
+                if items.count > 3 {
+                    Button { withAnimation(HomeMotion.spring) { allDayExpanded.toggle() } } label: {
+                        Text(allDayExpanded ? "Show fewer" : "\(items.count - 2) more all day")
+                            .font(CalFont.font(.sans, size: 14, relativeTo: .footnote)).foregroundStyle(Color.calInk2)
+                            .padding(.horizontal, Spacing.gutter).frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                            .overlay(alignment: .bottom) { Rectangle().fill(Color.calLine).frame(height: 1) }
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("board.allDayMore")
                 }
             }
             .padding(.top, 14)
@@ -437,7 +451,13 @@ struct TimelineBoard: View {
         let isToday = days.contains(model.today)
         let ref = isToday ? model.today : first
         let y = DayLogic.initialScrollY(day: ref, isToday: isToday, content: model.content(for: ref), now: model.now, grid: grid)
+        // The scroll view has no content size on the first frame, so a scroll issued now is clamped to the top
+        // (the day opened at 00:00 on a phone at 18:46). Scroll once it has laid out.
         position.scrollTo(y: y)
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(60))
+            position.scrollTo(y: y)
+        }
     }
 }
 

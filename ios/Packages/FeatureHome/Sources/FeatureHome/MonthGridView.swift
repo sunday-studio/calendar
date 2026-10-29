@@ -7,24 +7,28 @@ import SwiftUI
 struct MonthGridView: View {
     let model: HomeViewModel
     private var showWeeks: Bool { model.prefs.showWeekNumbers }
-    private var columns: [GridItem] {
-        (showWeeks ? [GridItem(.fixed(28), spacing: 0)] : []) + Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
-    }
 
     var body: some View {
         VStack(spacing: 0) {
-            LazyVGrid(columns: columns, spacing: 0) {
-                if showWeeks { Color.clear.frame(height: 30).accessibilityHidden(true) }
-                ForEach(Array(model.weekdayNames.enumerated()), id: \.offset) { _, name in
-                    Text(name).font(CalFont.font(.sans, size: 12, relativeTo: .caption)).foregroundStyle(Color.calInk2)
-                        .frame(height: 30).accessibilityHidden(true)
-                }
-                ForEach(Array(model.gridCells.enumerated()), id: \.element) { n, day in
-                    if showWeeks, n % 7 == 0, let w = model.weekNumber(row: n / 7) {
-                        Text("\(w)").font(CalFont.label).foregroundStyle(Color.calInk3)
-                            .frame(maxWidth: .infinity, minHeight: 50).accessibilityLabel("Week \(w)")
+            // Not lazy: the cells must exist on the first frame so they move with the card instead of arriving after it.
+            Grid(horizontalSpacing: 0, verticalSpacing: 0) {
+                GridRow {
+                    if showWeeks { Color.clear.frame(width: 28, height: 30).accessibilityHidden(true) }
+                    ForEach(Array(model.weekdayNames.enumerated()), id: \.offset) { _, name in
+                        Text(name).font(CalFont.font(.sans, size: 12, relativeTo: .caption)).foregroundStyle(Color.calInk2)
+                            .frame(maxWidth: .infinity).frame(height: 30).accessibilityHidden(true)
                     }
-                    cell(day)
+                }
+                ForEach(Array(model.gridCells.chunked(7).enumerated()), id: \.offset) { row, days in
+                    GridRow {
+                        if showWeeks {
+                            if let w = model.weekNumber(row: row) {
+                                Text("\(w)").font(CalFont.label).foregroundStyle(Color.calInk3)
+                                    .frame(width: 28, height: 50).accessibilityLabel("Week \(w)")
+                            } else { Color.clear.frame(width: 28, height: 50) }
+                        }
+                        ForEach(days, id: \.self) { cell($0) }
+                    }
                 }
             }
             .padding(.horizontal, Spacing.s).padding(.vertical, 6)
@@ -88,4 +92,8 @@ struct MonthGridView: View {
         .accessibilityLabel("\(model.format.weekday(day)) \(model.format.dayMonth(day))\(isToday ? ", today" : "")\(dots.isEmpty ? "" : ", has events")")
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
+}
+
+private extension Array {
+    func chunked(_ n: Int) -> [[Element]] { stride(from: 0, to: count, by: n).map { Array(self[$0..<Swift.min($0 + n, count)]) } }
 }

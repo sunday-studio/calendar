@@ -50,14 +50,21 @@ public struct EventEditorView: View {
         .calSheet(isPresented: isOpen(.reminder)) { reminderSheet }
         .calSheet(isPresented: isOpen(.scope)) { scopeSheet }
         .calSheet(isPresented: isOpen(.discard)) { discardSheet }
-        .onChange(of: sheet) { _, new in if new != nil { Haptics.shared.play(.sheetOpen) } }
+        .onChange(of: sheet) { _, new in
+            guard new != nil else { return }
+            Haptics.shared.play(.sheetOpen)
+            // The keyboard must go first: a picker sheet opened over it ends up half behind the keys.
+            titleFocus = false
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
         .onChange(of: model.saveState) { _, s in
             if s == .saved { Haptics.shared.play(.saved); EventEditorViewModel.clearDraft(); onClose(true) }
             if case .failed = s { Haptics.shared.play(.failure); titleFocus = true }
             if case .conflict = s { Haptics.shared.play(.conflict) }
         }
         .overlay(alignment: .bottom) {
-            if let t = toast { ToastView(t, actionTitle: "OK") { toast = nil }.padding(.bottom, 40) }
+            if let t = toast { ToastView(t, actionTitle: "OK") { toast = nil }.padding(.bottom, 40)
+                .task(id: t) { try? await Task.sleep(for: .seconds(2.5)); toast = nil } }
         }
         .task { if !model.isEditing { titleFocus = true } }
         .presentationBackground(Color.calBg)
@@ -143,7 +150,7 @@ public struct EventEditorView: View {
             Button { sheet = .calendar } label: {
                 FormValueRow("Calendar", value: model.calendarName, color: model.calendarColor, changed: model.calendarChanged, isFirst: true)
             }.buttonStyle(.plain)
-            ToggleRow("All day", isOn: Binding(get: { model.isAllDay }, set: { model.isAllDay = $0 }))
+            ToggleRow("All day", isOn: Binding(get: { model.isAllDay }, set: { model.isAllDay = $0 }).haptic())
             Button { sheet = .starts } label: { FormValueRow("Starts", value: model.startText, changed: model.startChanged) }.buttonStyle(.plain)
             Button { sheet = .ends } label: { FormValueRow("Ends", value: model.endText, changed: model.endChanged) }.buttonStyle(.plain)
             Button { sheet = .repeatRule } label: { FormValueRow("Repeat", value: model.repeatText, changed: model.repeatChanged) }.buttonStyle(.plain)

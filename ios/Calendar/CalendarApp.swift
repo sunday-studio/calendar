@@ -129,10 +129,11 @@ struct AuthedRoot: View {
         } event: { id in
             EventScreenHost(id: id, env: env, writer: writer)
         } settings: { openAccounts in
-            SettingsScreen(env: env, tokens: api, openAccounts: openAccounts)
-        } new: { start, close in
-            NewEntryHost(start: start, env: env, writer: writer, api: api, onClose: close)
+            SettingsScreen(env: env, tokens: api, openAccounts: openAccounts, onLogOut: unpair)
+        } new: { entry, close in
+            NewEntryHost(entry: entry, env: env, writer: writer, api: api, onClose: close)
         }
+        .draft { EventEditorViewModel.loadDraft().map(\.title) }
         .search { openEvent, close in
             AnyView(SearchHost(env: env, api: api, writer: writer, openEvent: openEvent, close: close))
         }
@@ -218,6 +219,10 @@ struct EditorHost: View {
             if let model { EventEditorView(model: model, accountNames: names, onClose: onClose) }
             else { Color.calBg.ignoresSafeArea() }
         }
+        // On the host, not the form: the sheet is already the right colour and square while it rises.
+        .presentationBackground(Color.calBg)
+        .presentationCornerRadius(0)
+        .presentationDragIndicator(.hidden)
         .task {
             let cals = (try? await env.calendars.calendars()) ?? []
             let settings = try? await env.settings.settings()
@@ -326,8 +331,8 @@ struct HomeUITestHost: View {
             EventScreenHost(id: id, env: env, writer: w)
         } settings: { openAccounts in
             SettingsScreen(env: env, openAccounts: openAccounts)
-        } new: { start, close in
-            EditorHost(kind: .new(start), env: env, writer: w) { _ in close() }
+        } new: { entry, close in
+            EditorHost(kind: .new(entry.start), env: env, writer: w) { _ in close() }
         }
         .onAppear { writer = w }
     }
@@ -364,3 +369,16 @@ struct EditorUITestHost: View {
     }
 }
 #endif
+
+/// Screens hide the system navigation bar and draw their own, which turns the edge-swipe back off.
+/// Keep the gesture alive whenever there is something to pop to.
+extension UINavigationController: @retroactive UIGestureRecognizerDelegate {
+    override open func viewDidLoad() {
+        super.viewDidLoad()
+        interactivePopGestureRecognizer?.delegate = self
+    }
+
+    public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        viewControllers.count > 1
+    }
+}

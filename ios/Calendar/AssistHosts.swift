@@ -2,6 +2,7 @@ import CalendarCore
 import CalendarUI
 import FeatureAssist
 import FeatureEvent
+import FeatureHome
 import SwiftUI
 
 /// The FAB sheet: quick add first (typing, voice, free time), the full form on request. A long-press on an empty
@@ -20,14 +21,28 @@ struct NewEntryHost: View {
     @State private var cals: [HubCalendar] = []
     @State private var defaultCal: String?
 
-    init(start: Date?, env: AppEnvironment, writer: WriteCoordinator, api: APIClient, onClose: @escaping () -> Void) {
+    init(entry: NewEntry, env: AppEnvironment, writer: WriteCoordinator, api: APIClient, onClose: @escaping () -> Void) {
         self.env = env; self.writer = writer; self.api = api; self.onClose = onClose
-        _mode = State(initialValue: start.map { .form($0) } ?? .quick)
+        switch entry {
+        case .blank: _mode = State(initialValue: .quick)
+        case .at(let d): _mode = State(initialValue: .form(d))
+        case .draft: _mode = State(initialValue: EventEditorViewModel.loadDraft().map { .prefill($0) } ?? .form(nil))
+        }
     }
 
     private var tz: TimeZone { (try? env.db.userTimeZone()) ?? .current }
 
     var body: some View {
+        content
+            // Set here, on the sheet's own root, so the sheet is square and coloured from its first frame
+            // (inside the loaded form they landed late: rounded and see-through while rising).
+            .background(Color.calBg.ignoresSafeArea())
+            .presentationBackground(Color.calBg)
+            .presentationCornerRadius(0)
+            .presentationDragIndicator(.hidden)
+    }
+
+    @ViewBuilder private var content: some View {
         switch mode {
         case .form(let start):
             EditorHost(kind: .new(start), env: env, writer: writer) { _ in onClose() }

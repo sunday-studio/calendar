@@ -11,6 +11,9 @@ struct HomeView: View {
     let openSettings: () -> Void
     var openSearch: (() -> Void)?
     let newEventAt: (Date?) -> Void
+    /// Title of the saved draft ("" = untitled), nil when there is none.
+    var draft: String?
+    var openDraft: () -> Void
     let forget: () -> Void
     var moveEvent: ((AgendaItem, EventWhen, EventScope) async -> WriteOutcome)?
     var zoomNS: Namespace.ID?
@@ -52,7 +55,7 @@ struct HomeView: View {
                 ToastView("Can\u{2019}t edit while offline", actionTitle: "OK") { offlineToast = false }
                     .frame(maxHeight: .infinity, alignment: .bottom).padding(.bottom, 96)
                     .zIndex(2)
-                    .task { try? await Task.sleep(for: .seconds(4)); offlineToast = false }
+                    .task { try? await Task.sleep(for: .seconds(2.5)); offlineToast = false }
             }
         }
         .background(Color.calBg)
@@ -73,9 +76,10 @@ struct HomeView: View {
         }
         .calSheet(isPresented: $showMenu) {
             CalSheet(title: "Calendar") {
-                SheetRow("Settings", isFirst: true) { showMenu = false; openSettings() }
+                SheetRow("Go to today", isFirst: true) { showMenu = false; Haptics.shared.play(.today); model.goToToday() }
+                SheetRow("Settings") { showMenu = false; openSettings() }
                 SheetRow("Accounts") { showMenu = false; openAccounts() }
-                SheetRow("Forget this server", isDestructive: true) { showMenu = false; confirmForget = true }
+                SheetRow("Log out", isDestructive: true) { showMenu = false; confirmForget = true; Haptics.shared.play(.destructive) }
             }
         }
         .calSheet(isPresented: Binding(get: { pendingMove != nil }, set: { if !$0 { pendingMove = nil } })) {
@@ -90,10 +94,10 @@ struct HomeView: View {
             }
         }
         .calSheet(isPresented: $confirmForget) {
-            CalSheet(title: "Forget this server?", message: "This phone stops showing your calendars until you pair it again. Nothing is deleted on the server.") {
+            CalSheet(title: "Log out?", message: "This phone stops showing your calendars until you pair it again. Nothing is deleted on the server.") {
                 VStack(spacing: 10) {
-                    CalButton("Forget this server", kind: .danger) { confirmForget = false; forget() }
-                    CalButton("Keep it", kind: .outline) { confirmForget = false }
+                    CalButton("Log out", kind: .danger) { confirmForget = false; Haptics.shared.play(.removed); forget() }
+                    CalButton("Stay logged in", kind: .outline) { confirmForget = false }
                 }
                 .padding(.horizontal, Spacing.gutter)
             }
@@ -125,7 +129,7 @@ struct HomeView: View {
                 default: return "\(email) refused the change."
                 }
             }()
-            ToastCenter.shared.show("\(m.item.title) went back to \(back).", detail: why, actionTitle: "Try again", seconds: 8) { perform(m, scope: scope) }
+            ToastCenter.shared.show("\(m.item.title) went back to \(back).", detail: why, actionTitle: "Try again", seconds: 5) { perform(m, scope: scope) }
         }
     }
 
@@ -144,7 +148,7 @@ struct HomeView: View {
                     content
                 }
             }
-            .refreshable { await Task { await model.refresh() }.value }
+            .refreshable { await Task { await model.refresh() }.value; Haptics.shared.play(.refreshDone) }
             .onChange(of: reviewTick) { _, _ in withAnimation(Motion.animation(reduceMotion: reduceMotion)) { proxy.scrollTo("invitations", anchor: .top) } }
             .onChange(of: model.scrollTarget) { _, target in
                 guard let target else { return }
@@ -177,7 +181,7 @@ struct HomeView: View {
                           shift: { n in Haptics.shared.play(.dayPage); model.select(model.selectedDay.adding(days: n)) },
                           canWrite: model.connectionBanner == nil && moveEvent != nil,
                           onCommit: { item, start, end in commit(PendingMove(item: item, start: start, end: end)) },
-                          onBlocked: { ToastCenter.shared.show($0, actionTitle: "OK", seconds: 4) },
+                          onBlocked: { ToastCenter.shared.show($0, actionTitle: "OK", seconds: 2.5) },
                           zoomNS: zoomNS)
         }
     }
@@ -225,23 +229,21 @@ struct HomeView: View {
             .accessibilityIdentifier("home.month")
             Spacer(minLength: Spacing.s)
             if let openSearch {
-                Button(action: { Haptics.shared.play(.rowTap); openSearch() }) { SearchGlyph().frame(width: Spacing.hit, height: Spacing.hit) }
+                Button(action: { Haptics.shared.play(.rowTap); openSearch() }) { SearchGlyph().scaleEffect(0.8).frame(width: Spacing.hit, height: Spacing.hit).contentShape(Rectangle()) }
                     .buttonStyle(.plain).accessibilityLabel("Search").accessibilityIdentifier("home.search")
             }
-            // Settings has no home on the canvas yet (DECISIONS Q5): long-press the Today button for Accounts.
+            // Settings has no home on the canvas yet (DECISIONS Q5): the date button opens the menu (Today, Settings, Accounts).
             SelectField(value: HomeMode.titles[mode.rawValue]) { showViewSelect = true }
                 .accessibilityLabel("View, \(HomeMode.titles[mode.rawValue])")
                 .accessibilityIdentifier("home.viewSelect")
                 .padding(.trailing, 8 - Spacing.hit + Spacing.todayButton)   // gap 8 to the date button
-            TodayButton(day: model.todayNumber) { Haptics.shared.play(.today); model.goToToday() }
+            TodayButton(day: model.todayNumber) { showMenu = true }
                 // The canvas draws a 38pt square; the touch target is 44pt (HIG) without moving the drawn box.
                 .frame(minWidth: Spacing.hit, minHeight: Spacing.hit).contentShape(Rectangle())
                 .padding(.trailing, -3).padding(.vertical, -3)
-                .highPriorityGesture(LongPressGesture(minimumDuration: 0.5).onEnded { _ in showMenu = true })
                 .accessibilityAction(named: "Settings", openSettings)
                 .accessibilityAction(named: "Accounts", openAccounts)
-                .accessibilityAction(named: "Menu") { showMenu = true }
-                .accessibilityIdentifier("home.today")
+                                .accessibilityIdentifier("home.today")
         }
         .padding(.leading, Spacing.gutter).padding(.trailing, Spacing.gutter - 3)
         .padding(.top, Spacing.xs)
@@ -261,6 +263,19 @@ struct HomeView: View {
                         kind: b.kind == .offline ? .attention : .error)
                 .padding(.top, 16)
                 .accessibilityIdentifier("home.offline")
+        }
+        if model.signInBanner == nil, let b = model.errorBanner {
+            AmberBanner(b.title, message: b.message, actionTitle: "Details", action: openAccounts, kind: .error)
+                .padding(.top, 16).accessibilityIdentifier("home.accountError")
+        }
+        if let draft, !model.isMonthOpen {
+            Button { Haptics.shared.play(.rowTap); openDraft() } label: {
+                ListRow("Draft", sub: draft.isEmpty ? "Untitled event" : draft, isFirst: true) {
+                    Text("Continue").font(CalFont.status).foregroundStyle(Color.calAmber)
+                }
+            }
+            .buttonStyle(.plain).padding(.top, 16)
+            .accessibilityLabel("Draft, \(draft.isEmpty ? "untitled event" : draft), continue").accessibilityIdentifier("home.draft")
         }
         if model.signInBanner == nil, model.connectionBanner == nil, !model.isMonthOpen, let b = model.invitationsBanner {
             AmberBanner(b.title, message: b.message, actionTitle: "Review", action: { reviewTick += 1 })
@@ -427,6 +442,7 @@ struct HomeView: View {
                 case .row(let r):
                     Button { Haptics.shared.play(.rowTap); openEvent(r.id) } label: {
                         EventRow(r.model, isFirst: n == 0)
+                            .contentShape(Rectangle())
                     }
                     .zoomSourceIfAvailable(r.id, ns: zoomNS, reduceMotion: reduceMotion)
                     .buttonStyle(PressRowStyle(reduceMotion: reduceMotion))
