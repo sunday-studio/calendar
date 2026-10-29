@@ -75,6 +75,7 @@ struct NextEventWidget: Widget {
         .configurationDisplayName("Next event")
         .description("Your next event and how long until it starts.")
         .supportedFamilies([.systemSmall, .accessoryRectangular, .accessoryCircular, .accessoryInline])
+        .contentMarginsDisabled()
     }
 }
 
@@ -109,6 +110,7 @@ struct TodayWidget: Widget {
         .configurationDisplayName("Today")
         .description("What is left of today.")
         .supportedFamilies([.systemMedium, .systemLarge])
+        .contentMarginsDisabled()
     }
 }
 
@@ -134,6 +136,7 @@ struct DateWidget: Widget {
         .configurationDisplayName("Date")
         .description("Today's date, or how many events are left.")
         .supportedFamilies([.systemSmall, .accessoryCircular])
+        .contentMarginsDisabled()
     }
 }
 
