@@ -100,12 +100,20 @@ public struct DayLayout: Equatable, Sendable {
     /// Timed events still to come today, after the hero, in order.
     public var today: [WidgetRowData]
     public var tomorrow: [WidgetRowData]
+    /// Days after tomorrow that have events (up to a week ahead), so tall widgets keep filling.
+    public var later: [LaterDay]
+    public struct LaterDay: Equatable, Sendable {
+        public var header: String
+        public var rows: [WidgetRowData]
+        public init(header: String, rows: [WidgetRowData]) { self.header = header; self.rows = rows }
+    }
     /// Events not over yet today, the hero included.
     public var todayLeft: Int
     public var timeline: DayTimeline?
 
     public init(header: String, tomorrowHeader: String, allDay: [AllDayChip], hero: Hero?, today: [WidgetRowData],
-                tomorrow: [WidgetRowData], todayLeft: Int, timeline: DayTimeline? = nil) {
+                tomorrow: [WidgetRowData], later: [LaterDay] = [], todayLeft: Int, timeline: DayTimeline? = nil) {
+        self.later = later
         self.timeline = timeline
         self.header = header; self.tomorrowHeader = tomorrowHeader; self.allDay = allDay; self.hero = hero
         self.today = today; self.tomorrow = tomorrow; self.todayLeft = todayLeft
@@ -126,26 +134,34 @@ public enum WidgetFill {
         public var tomorrowShown: Bool
     }
 
-    /// `slots`: how many 24 pt rows fit; a group label takes one.
+    /// `slots`: how many 24 pt rows fit; a group label takes one. After today come tomorrow and then each later day with events.
     public static func rows(_ l: DayLayout, slots: Int) -> Result {
-        guard slots > 0 else { return Result(rows: [], overflow: l.today.count + l.tomorrow.count, tomorrowShown: false) }
+        let groups: [(label: String, rows: [WidgetRowData])] =
+            (l.tomorrow.isEmpty ? [] : [(l.tomorrowHeader, l.tomorrow)]) + l.later.filter { !$0.rows.isEmpty }.map { ($0.header, $0.rows) }
+        let total = l.today.count + groups.reduce(0) { $0 + $1.rows.count }
+        guard slots > 0 else { return Result(rows: [], overflow: total, tomorrowShown: false) }
         let doneToday = l.hero == nil && l.today.isEmpty
-        if doneToday {
-            guard !l.tomorrow.isEmpty, slots >= 2 else { return Result(rows: [], overflow: l.tomorrow.count, tomorrowShown: false) }
-            let n = min(slots - 1, l.tomorrow.count)
-            return Result(rows: [.label("NEXT \u{00B7} TOMORROW")] + l.tomorrow.prefix(n).map { .event($0) },
-                          overflow: l.tomorrow.count - n, tomorrowShown: true)
-        }
-        if l.today.count >= slots {
+        if !doneToday && l.today.count >= slots {
             return Result(rows: l.today.prefix(slots).map { .event($0) }, overflow: l.today.count - slots, tomorrowShown: false)
         }
-        var rows: [Row] = l.today.map { .event($0) }
-        let free = slots - l.today.count
-        guard free >= 2, !l.tomorrow.isEmpty else { return Result(rows: rows, overflow: 0, tomorrowShown: false) }
-        let n = min(free - 1, l.tomorrow.count)
-        rows.append(.label(l.tomorrowHeader))
-        rows += l.tomorrow.prefix(n).map { .event($0) }
-        return Result(rows: rows, overflow: l.tomorrow.count - n, tomorrowShown: true)
+        var rows: [Row] = doneToday ? [] : l.today.map { .event($0) }
+        var free = slots - rows.count
+        var shown = false, overflow = 0
+        for (n, g) in groups.enumerated() {
+            guard free >= 2 else { break }
+            let take = min(free - 1, g.rows.count)
+            let tomorrowFirst = doneToday && n == 0 && !l.tomorrow.isEmpty
+            rows.append(.label(tomorrowFirst ? "NEXT \u{00B7} TOMORROW" : g.label))
+            rows += g.rows.prefix(take).map { .event($0) }
+            free -= take + 1
+            shown = true
+            if take < g.rows.count {
+                overflow = g.rows.count - take + groups.dropFirst(n + 1).reduce(0) { $0 + $1.rows.count }
+                break
+            }
+        }
+        if !shown && doneToday { overflow = total }
+        return Result(rows: rows, overflow: overflow, tomorrowShown: shown)
     }
 }
 
@@ -372,6 +388,13 @@ public enum TimelineBuilder {
                                  live: s <= now, statusKind: kind, spoken: spoken, faded: i.myResponse == "declined")
         }
 
+        let laterDays: [DayLayout.LaterDay] = (2...7).compactMap { k in
+            let day = today.adding(days: k)
+            let items = timed.filter { i in i.start.map { DayKey($0, in: input.tz) == day } ?? false }
+            return items.isEmpty ? nil : DayLayout.LaterDay(header: format.headerDate(day.startOfDay(in: input.tz)),
+                                                            rows: items.map { row($0, in: items, plain: stale) })
+        }
+
         var hero: DayLayout.Hero?
         var rest = todays
         if !stale, let first = todays.first(where: { $0.myResponse != "declined" }), let s = first.start, let e = first.end {
@@ -404,6 +427,7 @@ public enum TimelineBuilder {
                          allDay: allDay, hero: hero,
                          today: rest.map { row($0, in: todays, plain: stale) },
                          tomorrow: tomorrows.map { row($0, in: tomorrows, plain: stale) },
+                         later: laterDays,
                          todayLeft: todays.count, timeline: timeline(todays, now: now, format: format, heroId: hero?.id))
     }
 

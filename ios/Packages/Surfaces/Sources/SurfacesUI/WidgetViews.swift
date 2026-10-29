@@ -144,7 +144,7 @@ struct NextBlock: View {
         }
         .padding(.horizontal, WidgetGrid.blockInset)
         .frame(height: 48)
-        .background(ContainerRelativeShape().fill(AccountColor(key: hero.color).bright))
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(AccountColor(key: hero.color).bright))
         .padding(.horizontal, WidgetGrid.blockInset)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(hero.spoken)
@@ -166,7 +166,7 @@ struct NextBlock: View {
     private func pill(_ t: String) -> some View {
         Text(t).font(CalFont.font(.sansMedium, size: 14, relativeTo: .body)).foregroundStyle(WidgetTheme.joinInk)
             .padding(.horizontal, 14).frame(height: 32)
-            .background(ContainerRelativeShape().fill(WidgetTheme.blockInk))   // r = container - 16 = 8
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(WidgetTheme.blockInk))   // r = container - 16 = 8
     }
 }
 
@@ -358,11 +358,11 @@ private struct SignInBlock: View {
             Link(destination: SurfaceLink.accounts.url) {
                 Text("Sign in").font(CalFont.font(.sansMedium, size: 13, relativeTo: .body)).foregroundStyle(WidgetTheme.joinInk)
                     .padding(.horizontal, 12).frame(height: 28)
-                    .background(ContainerRelativeShape().fill(WidgetTheme.blockInk))
+                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(WidgetTheme.blockInk))
             }
         }
         .padding(.horizontal, WidgetGrid.blockInset).frame(height: 44)
-        .background(ContainerRelativeShape().fill(WidgetTheme.amber))
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(WidgetTheme.amber))
         .padding(.horizontal, WidgetGrid.blockInset).padding(.bottom, 2)
         .accessibilityElement(children: .combine)
     }
@@ -415,7 +415,7 @@ public struct NextSmallView: View {
                         .padding(.horizontal, 8).padding(.top, 50)
                 }
                 .frame(height: 90, alignment: .topLeading).frame(maxWidth: .infinity, alignment: .topLeading)
-                .background(ContainerRelativeShape().fill(AccountColor(key: h.color).bright))
+                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(AccountColor(key: h.color).bright))
                 .padding(8)
                 Spacer(minLength: 0)
                 VStack(alignment: .leading, spacing: 0) {
@@ -645,7 +645,7 @@ struct MediumNextPanelView: View {
     var body: some View {
         let h = layout.hero!
         let fill = WidgetFill.rows(DayLayout(header: layout.header, tomorrowHeader: layout.tomorrowHeader, allDay: layout.allDay, hero: h,
-                                             today: layout.today, tomorrow: layout.tomorrow, todayLeft: layout.todayLeft), slots: 4)
+                                             today: layout.today, tomorrow: layout.tomorrow, later: layout.later, todayLeft: layout.todayLeft), slots: 4)
         ZStack(alignment: .topLeading) {
             panel(h)
             VStack(alignment: .leading, spacing: 0) {
@@ -684,7 +684,7 @@ struct MediumNextPanelView: View {
                 if let url = h.joinURL {
                     Link(destination: url) {
                         Text("Join").font(CalFont.font(.sansMedium, size: 13, relativeTo: .body)).foregroundStyle(WidgetTheme.joinInk)
-                            .padding(.horizontal, 12).frame(height: 28).background(ContainerRelativeShape().fill(WidgetTheme.blockInk))
+                            .padding(.horizontal, 12).frame(height: 28).background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(WidgetTheme.blockInk))
                     }
                 }
             }
@@ -692,7 +692,7 @@ struct MediumNextPanelView: View {
         }
         .foregroundStyle(WidgetTheme.blockInk)
         .frame(width: 132, height: 142, alignment: .topLeading)
-        .background(ContainerRelativeShape().fill(AccountColor(key: h.color).bright))
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(AccountColor(key: h.color).bright))
         .padding(8)
         .accessibilityElement(children: .ignore).accessibilityLabel(h.spoken)
     }

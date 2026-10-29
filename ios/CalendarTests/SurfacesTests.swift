@@ -630,6 +630,15 @@ private final class MemoryPushStore: PushRegistrationStore, @unchecked Sendable 
         #expect(WidgetFill.rows(l, slots: 3).rows.first == .label("NEXT \u{00B7} TOMORROW"))
     }
 
+    @Test func fillKeepsGoingIntoLaterDaysWhenTomorrowIsEmpty() {
+        func rows(_ n: Int, _ p: String) -> [WidgetRowData] { (0..<n).map { WidgetRowData(id: "\(p)\($0)", time: "09:00", title: "\(p)\($0)", status: nil, color: "cobalt", live: false) } }
+        let l = DayLayout(header: "FRI 30", tomorrowHeader: "TOMORROW", allDay: [], hero: nil, today: rows(2, "t"), tomorrow: [],
+                          later: [.init(header: "MON 2", rows: rows(2, "a")), .init(header: "TUE 3", rows: rows(5, "b"))], todayLeft: 2)
+        let r = WidgetFill.rows(l, slots: 10)
+        #expect(r.rows.count == 10 && r.tomorrowShown && r.overflow == 1)
+        #expect(r.rows.contains(.label("MON 2")) && r.rows.contains(.label("TUE 3")))
+    }
+
     @Test func staleLayoutDropsTheHeroAndStatusWords() {
         let l = TimelineBuilder.layout(input([item("a", "Roadmap", start: at(10, 30)), item("b", "Lunch", start: at(12, 30))]), at: at(10, 22), format: fmt(), stale: true)
         #expect(l.hero == nil && l.today.count == 2)
