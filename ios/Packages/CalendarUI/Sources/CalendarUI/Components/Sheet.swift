@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Radio mark (canvas `.rd`): 20pt circle, 1pt border; on = 6pt ink ring.
 public struct RadioMark: View {
@@ -29,6 +30,7 @@ public struct SheetRow: View {
         Button(action: action) {
             HStack(spacing: Spacing.m) {
                 Text(title).font(CalFont.heading).foregroundStyle(isDestructive ? Color.calRed : Color.calInk)
+                    .lineLimit(1).truncationMode(.tail)   // long names (calendars) never wrap
                 Spacer(minLength: Spacing.s)
                 if let detail { Text(detail).font(CalFont.sub).foregroundStyle(Color.calInk2) }
                 if let radio { RadioMark(isOn: radio) }
@@ -98,6 +100,10 @@ private struct CalSheetModifier<SheetContent: View>: ViewModifier {
                 }
             }
             .animation(Motion.animation(reduceMotion: reduceMotion), value: isPresented)
+            // A sheet opened while a field has focus would sit half behind the keyboard: drop the keyboard first.
+            .onChange(of: isPresented) { _, on in
+                if on { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
+            }
         }
     }
 }

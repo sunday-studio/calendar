@@ -82,6 +82,7 @@ public struct FormValueRow: View {
                 if let color { Rectangle().fill(color.color).frame(width: 14, height: 14) }
                 Text(value).font(CalFont.font(.sans, size: 16, relativeTo: .body))
                     .foregroundStyle(changed ? Color.calAmber : Color.calInk2)
+                    .lineLimit(1).truncationMode(.tail)   // long calendar names end in an ellipsis
                 if showsChevron { CalGlyph(.forward, size: 10).foregroundStyle(Color.calInk2) }
             }
         }

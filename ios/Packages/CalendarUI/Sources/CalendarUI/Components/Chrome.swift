@@ -60,7 +60,7 @@ public struct ScreenNav: View {
                 switch leading {
                 case .back, .close:
                     Button(action: onLeading) { CalGlyph(leading == .back ? .back : .close).foregroundStyle(Color.calInk)
-                        .frame(width: Spacing.hit, height: Spacing.hit) }
+                        .frame(width: Spacing.hit, height: Spacing.hit).contentShape(Rectangle()) }
                         .accessibilityLabel(leading == .back ? "Back" : "Close")
                 case .none:
                     Color.clear.frame(width: Spacing.hit, height: Spacing.hit)
@@ -71,7 +71,7 @@ public struct ScreenNav: View {
             if let trailing, let onTrailing {
                 Button(action: onTrailing) {
                     Text(trailing).font(CalFont.body).foregroundStyle(Color.calAmber)
-                        .padding(.horizontal, Spacing.m).frame(minWidth: Spacing.hit, minHeight: Spacing.hit)
+                        .padding(.horizontal, Spacing.m).frame(minWidth: Spacing.hit, minHeight: Spacing.hit).contentShape(Rectangle())
                 }
             } else {
                 Color.clear.frame(width: Spacing.hit, height: Spacing.hit)

@@ -95,7 +95,7 @@ public struct NavRow: View {
     public var body: some View {
         SettingsRow(title, sub: sub, isFirst: isFirst) {
             HStack(spacing: 8) {
-                if let value { Text(value).font(CalFont.font(.sans, size: 16, relativeTo: .body)).foregroundStyle(Color.calInk2) }
+                if let value { Text(value).font(CalFont.font(.sans, size: 16, relativeTo: .body)).foregroundStyle(Color.calInk2).lineLimit(1).truncationMode(.tail) }
                 CalGlyph(.forward, size: 10).foregroundStyle(Color.calInk2)
             }
         }

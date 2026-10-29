@@ -126,6 +126,7 @@ public struct AmberBanner: View {
                 Button(action: action) {
                     Text(actionTitle).font(CalFont.font(.sansMedium, size: 15, relativeTo: .subheadline)).foregroundStyle(tint)
                         .frame(minWidth: Spacing.hit, minHeight: Spacing.hit)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
@@ -224,6 +225,7 @@ public struct ToastView: View {
                     Text(actionTitle).font(CalFont.font(.sansMedium, size: 16, relativeTo: .body))
                         .foregroundStyle(Theme.inverseInk.color)
                         .frame(minHeight: Spacing.hit)
+                        .contentShape(Rectangle())
                 }
             }
         }
@@ -283,9 +285,10 @@ public struct CalButton: View {
                 .frame(height: size == .small ? 40 : Spacing.buttonHeight)
                 .background(kind == .primary ? Color.calInk : Color.clear)
                 .overlay { if let stroke { Rectangle().strokeBorder(stroke, lineWidth: 1) } }
+                .frame(minHeight: Spacing.hit)
+                .contentShape(Rectangle())   // the whole box taps, not just the text and stroke
         }
         .buttonStyle(.plain)
-        .frame(minHeight: Spacing.hit)
         .opacity(isEnabled ? 1 : 0.35)
     }
 }
