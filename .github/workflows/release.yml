@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check tag, VERSION and iOS marketing version agree
         env:
           TAG: ${{ github.ref_name }}
@@ -67,7 +67,7 @@ jobs:
       digest: ${{ steps.push.outputs.digest }}
       version: ${{ steps.meta.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Image name (lowercased)
         id: name
@@ -167,7 +167,7 @@ jobs:
       IMAGE: ${{ needs.image.outputs.image }}
       DIGEST: ${{ needs.image.outputs.digest }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build release assets
         run: |
