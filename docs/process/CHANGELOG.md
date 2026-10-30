@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-30
+
 ### Added
 - `CALENDAR_LOG_LEVEL` and `CALENDAR_OTEL_LOG_LEVEL` also take a comma-separated list, such as `info,error`, which lets
   through exactly those levels (and not warnings). A single level still means "that level and above".
@@ -111,7 +113,8 @@ edits and read-only calendars, plus push (silent wake, moved, cancelled and invi
 - The Week view was removed at the author's request; the views are Agenda, Day and 3 days.
 - Quick add runs on rules only until the alfather contract is confirmed (H9).
 
-[Unreleased]: https://github.com/sunday-studio/calendar/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/sunday-studio/calendar/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/sunday-studio/calendar/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/sunday-studio/calendar/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/sunday-studio/calendar/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/sunday-studio/calendar/releases/tag/v0.1.0
