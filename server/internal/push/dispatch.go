@@ -123,9 +123,13 @@ func silentMsg(rev int64) Message {
 
 // alertMsg is a generic alert; the notification service extension fetches the real text from the hub.
 func alertMsg(kind string, extra map[string]any, thread, collapse string) Message {
+	body := "Your calendar changed"
+	if kind == "invited" {
+		body = "You have a new invitation"
+	}
 	p := map[string]any{
 		"aps": map[string]any{
-			"alert":           map[string]any{"title": "Calendar", "body": "Your calendar changed"},
+			"alert":           map[string]any{"title": "Calendar", "body": body},
 			"mutable-content": 1,
 			"thread-id":       thread,
 		},
@@ -141,15 +145,23 @@ func alertMsg(kind string, extra map[string]any, thread, collapse string) Messag
 // ---- classification ----
 
 type snap struct {
-	exists bool // a live, non-cancelled row
-	start  int64
-	has    bool // has an upcoming occurrence
+	exists  bool // a live, non-cancelled row
+	start   int64
+	has     bool // has an upcoming occurrence
+	invited bool // an invitation still waiting for an answer, from someone else, that reached us recently
 }
+
+// inviteFresh is how recent an invitation must be to alert: a reconnect or full resync re-reads old pending
+// invitations, and those are not news.
+const inviteFresh = 30 * time.Minute
 
 func (d *Dispatcher) snapshot(ctx context.Context, eventID string, now time.Time) (snap, error) {
 	var status string
-	var del sql.NullInt64
-	err := d.DB.R.QueryRowContext(ctx, `SELECT status, deleted_at FROM events WHERE id=?`, eventID).Scan(&status, &del)
+	var del, upd sql.NullInt64
+	var resp sql.NullString
+	var org int
+	err := d.DB.R.QueryRowContext(ctx, `SELECT status, deleted_at, self_response, is_organizer, remote_updated_at FROM events WHERE id=?`, eventID).
+		Scan(&status, &del, &resp, &org, &upd)
 	if errors.Is(err, sql.ErrNoRows) {
 		return snap{}, nil
 	}
@@ -165,6 +177,7 @@ func (d *Dispatcher) snapshot(ctx context.Context, eventID string, now time.Time
 		return s, err
 	}
 	s.start, s.has = st.Int64, st.Valid
+	s.invited = resp.String == "needsAction" && org == 0 && upd.Valid && now.Sub(time.Unix(upd.Int64, 0)) <= inviteFresh
 	return s, nil
 }
 
@@ -175,7 +188,7 @@ type evChange struct {
 
 type decision struct {
 	silent bool
-	alert  string // "", "moved", "cancelled"
+	alert  string // "", "moved", "cancelled", "invited"
 }
 
 func within(start int64, now time.Time) bool {
@@ -205,6 +218,8 @@ func (d *Dispatcher) classify(ctx context.Context, c evChange, now time.Time) (d
 	case c.quiet:
 	case prevIn && !cur.exists:
 		dec.alert = "cancelled"
+	case !havePrev && cur.exists && cur.has && cur.invited && curIn:
+		dec.alert = "invited"
 	case prevUpcoming && cur.exists && cur.has && cur.start != prevStart && (curIn || prevIn):
 		dec.alert = "moved"
 	}
@@ -340,7 +355,7 @@ func (d *Dispatcher) Process(ctx context.Context) error {
 	}
 	now := d.now()
 	silent := other
-	var alerts []Message
+	var alerts, invites []Message
 	sort.Strings(order)
 	for _, id := range order {
 		dec, err := d.classify(ctx, *byEvent[id], now)
@@ -348,9 +363,17 @@ func (d *Dispatcher) Process(ctx context.Context) error {
 			return err
 		}
 		silent = silent || dec.silent
-		if dec.alert != "" {
+		switch dec.alert {
+		case "invited":
+			invites = append(invites, alertMsg("invited", map[string]any{"eventId": id, "rev": maxRev}, "invitations", "inv-"+id))
+		case "":
+		default:
 			alerts = append(alerts, alertMsg(dec.alert, map[string]any{"eventId": id, "rev": maxRev}, "events", "ev-"+id))
 		}
+	}
+	// A pile of invitations at once is a first sync or a reconnect, not news: say nothing rather than one vague alert.
+	if len(invites) <= maxAlerts {
+		alerts = append(alerts, invites...)
 	}
 	if len(alerts) > maxAlerts {
 		alerts = []Message{alertMsg("changed", map[string]any{"rev": maxRev}, "events", "changed")}

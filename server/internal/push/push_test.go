@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -529,5 +530,61 @@ func TestAllDayReminders(t *testing.T) {
 	}
 	if got := tick("2026-10-29T21:05:00Z"); len(got) != 1 {
 		t.Fatalf("configured time not honoured: %v", kinds(got))
+	}
+}
+
+// invite adds a new event (so the dispatcher has never seen it) and records it as a change from the provider.
+func (e *denv) invite(id, resp string, organizer bool, updatedAgo time.Duration) {
+	e.t.Helper()
+	Do(e.t, e.d, func(s *Seed) {
+		s.Event(Ev{ID: id, Cal: "C1", Title: "Secret invitation " + id, Start: unix("2026-10-15T14:00:00Z"), End: unix("2026-10-15T15:00:00Z")})
+	})
+	org := 0
+	if organizer {
+		org = 1
+	}
+	e.change(id, false, func(tx *db.Tx) {
+		tx.Exec(`UPDATE events SET self_response=?, is_organizer=?, remote_updated_at=? WHERE id=?`, resp, org, e.now.Add(-updatedAgo).Unix(), id)
+	})
+}
+
+func TestNewInvitationAlertsOnceWithIdsOnly(t *testing.T) {
+	e := newDEnv(t)
+	e.invite("INV1", "needsAction", false, 2*time.Minute)
+	got := e.process()
+	if k := kinds(got); len(k) != 2 || k[0] != "sync" || k[1] != "invited" {
+		t.Fatal(kinds(got))
+	}
+	if body := string(got[1].Body); strings.Contains(body, "Secret") || !strings.Contains(body, `"eventId":"INV1"`) {
+		t.Fatalf("payload must carry ids only: %s", body)
+	}
+	// a later edit of the same invitation is not a new invitation
+	e.change("INV1", false, func(tx *db.Tx) { tx.Exec(`UPDATE events SET title='Renamed' WHERE id='INV1'`) })
+	if k := kinds(e.process()); len(k) > 1 {
+		t.Fatal(k)
+	}
+}
+
+func TestInvitationsThatAreNotNewsStaySilent(t *testing.T) {
+	e := newDEnv(t)
+	e.invite("OLD", "needsAction", false, 3*time.Hour) // re-read by a resync, not new
+	e.invite("MINE", "needsAction", true, time.Minute) // I organise it
+	e.invite("DONE", "accepted", false, time.Minute)   // already answered
+	for _, k := range kinds(e.process()) {
+		if k == "invited" {
+			t.Fatal("alerted for something that is not a new invitation")
+		}
+	}
+}
+
+func TestInvitationPileIsDroppedNotCollapsed(t *testing.T) {
+	e := newDEnv(t)
+	for i := 0; i < maxAlerts+1; i++ {
+		e.invite(fmt.Sprintf("P%d", i), "needsAction", false, time.Minute)
+	}
+	for _, k := range kinds(e.process()) {
+		if k == "invited" || k == "changed" {
+			t.Fatalf("a first-sync pile must not alert: %s", k)
+		}
 	}
 }
