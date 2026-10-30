@@ -88,6 +88,9 @@ func ConfigFromEnv(version string) Config {
 	if h := getenv("OTEL_EXPORTER_OTLP_HEADERS"); h != "" {
 		c.Headers = len(strings.Split(h, ","))
 	}
+	if getenv("CALENDAR_OTEL_TOKEN") != "" && !hasAuthHeader(getenv("OTEL_EXPORTER_OTLP_HEADERS")) {
+		c.Headers++ // applyToken adds an Authorization header in Setup
+	}
 	if c.Disabled {
 		c.Traces.Enabled, c.Metrics.Enabled, c.Logs.Enabled = false, false, false
 	}

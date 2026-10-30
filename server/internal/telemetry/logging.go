@@ -15,12 +15,14 @@ import (
 // enabled, every record is additionally sent to the OTLP log pipeline (a second handler) with messages
 // scrubbed and sensitive keys dropped. Call it after Setup.
 func NewLogger(w io.Writer) *slog.Logger {
-	base := slog.NewJSONHandler(w, nil)
+	stdoutLevel, otlpLevel := LogLevels()
+	base := slog.NewJSONHandler(w, &slog.HandlerOptions{Level: stdoutLevel})
 	plain := slog.New(traceHandler{base})
 	plainLog.Store(plain)
 	var h slog.Handler = traceHandler{base}
 	if lp := logProv.Load(); lp != nil {
-		h = fanout{h, scrubHandler{otelslog.NewHandler(instrumentationName, otelslog.WithLoggerProvider(lp.p))}}
+		bridge := scrubHandler{otelslog.NewHandler(instrumentationName, otelslog.WithLoggerProvider(lp.p))}
+		h = fanout{h, levelHandler{otlpLevel, bridge}}
 	}
 	l := slog.New(h)
 	appLogger.Store(l)

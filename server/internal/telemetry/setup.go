@@ -92,6 +92,7 @@ func Setup(ctx context.Context, cfg Config) (func(context.Context) error, error)
 	if !cfg.Enabled() {
 		return noop, nil
 	}
+	applyToken()
 	res, err := newResource(ctx, cfg)
 	if err != nil {
 		return noop, err
