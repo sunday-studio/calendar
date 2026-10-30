@@ -11,8 +11,37 @@ import (
 // levelOff is above every real slog level, so a handler with this minimum drops all records.
 const levelOff = slog.Level(1 << 20)
 
-// parseLevel reads debug|info|warn|error|off (case-insensitive). ok is false for an empty or unknown value.
-func parseLevel(s string) (slog.Level, bool) {
+// levelSet decides which log levels pass. A single level is a minimum ("info" lets info, warn and error through).
+// A comma-separated list is exactly those levels ("info,error" lets info and error through, not warn or debug).
+type levelSet struct {
+	min   slog.Level // single value: the minimum
+	bands uint8      // list: bit per band, see band()
+	list  bool
+}
+
+var defaultLevels = levelSet{min: slog.LevelInfo}
+
+// band maps any slog level to 0 debug, 1 info, 2 warn, 3 error.
+func band(l slog.Level) uint {
+	switch {
+	case l >= slog.LevelError:
+		return 3
+	case l >= slog.LevelWarn:
+		return 2
+	case l >= slog.LevelInfo:
+		return 1
+	}
+	return 0
+}
+
+func (s levelSet) allows(l slog.Level) bool {
+	if s.list {
+		return s.bands&(1<<band(l)) != 0
+	}
+	return l >= s.min
+}
+
+func parseOne(s string) (slog.Level, bool) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "debug":
 		return slog.LevelDebug, true
@@ -28,33 +57,53 @@ func parseLevel(s string) (slog.Level, bool) {
 	return slog.LevelInfo, false
 }
 
-// LogLevels returns the minimum level for the stdout log and for the OTLP log export.
+// parseLevels reads debug|info|warn|error|off, or a comma-separated list of the first four. ok is false for an
+// empty value or one with no known level.
+func parseLevels(s string) (levelSet, bool) {
+	if !strings.Contains(s, ",") {
+		l, ok := parseOne(s)
+		return levelSet{min: l}, ok
+	}
+	set := levelSet{list: true}
+	for _, part := range strings.Split(s, ",") {
+		if l, ok := parseOne(part); ok && l != levelOff {
+			set.bands |= 1 << band(l)
+		}
+	}
+	return set, set.bands != 0
+}
+
+// LogLevels returns the levels that pass for the stdout log and for the OTLP log export.
 // CALENDAR_LOG_LEVEL sets both (default info); CALENDAR_OTEL_LOG_LEVEL overrides the OTLP side only.
-// Each accepts debug, info, warn, error or off. An unknown value falls back to the default.
-func LogLevels() (stdout, otlp slog.Level) {
-	stdout, _ = parseLevel(os.Getenv("CALENDAR_LOG_LEVEL"))
+// Each is debug, info, warn, error or off (a minimum), or a list such as "info,error" (exactly those levels).
+// An unknown value falls back to the default.
+func LogLevels() (stdout, otlp levelSet) {
+	stdout = defaultLevels
+	if l, ok := parseLevels(os.Getenv("CALENDAR_LOG_LEVEL")); ok {
+		stdout = l
+	}
 	otlp = stdout
-	if l, ok := parseLevel(os.Getenv("CALENDAR_OTEL_LOG_LEVEL")); ok {
+	if l, ok := parseLevels(os.Getenv("CALENDAR_OTEL_LOG_LEVEL")); ok {
 		otlp = l
 	}
 	return stdout, otlp
 }
 
-// levelHandler drops records below min before they reach next.
+// levelHandler drops records whose level the set does not allow before they reach next.
 type levelHandler struct {
-	min  slog.Level
+	set  levelSet
 	next slog.Handler
 }
 
 func (h levelHandler) Enabled(ctx context.Context, l slog.Level) bool {
-	return l >= h.min && h.next.Enabled(ctx, l)
+	return h.set.allows(l) && h.next.Enabled(ctx, l)
 }
 func (h levelHandler) Handle(ctx context.Context, r slog.Record) error { return h.next.Handle(ctx, r) }
 func (h levelHandler) WithAttrs(a []slog.Attr) slog.Handler {
-	return levelHandler{h.min, h.next.WithAttrs(a)}
+	return levelHandler{h.set, h.next.WithAttrs(a)}
 }
 func (h levelHandler) WithGroup(n string) slog.Handler {
-	return levelHandler{h.min, h.next.WithGroup(n)}
+	return levelHandler{h.set, h.next.WithGroup(n)}
 }
 
 // tokenHeader is the header CALENDAR_OTEL_TOKEN produces.

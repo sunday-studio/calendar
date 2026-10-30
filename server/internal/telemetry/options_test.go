@@ -9,24 +9,38 @@ import (
 )
 
 func TestLogLevels(t *testing.T) {
-	cases := []struct {
-		level, otel  string
-		stdout, otlp slog.Level
-	}{
-		{"", "", slog.LevelInfo, slog.LevelInfo},
-		{"debug", "", slog.LevelDebug, slog.LevelDebug},
-		{"warn", "", slog.LevelWarn, slog.LevelWarn},
-		{"off", "", levelOff, levelOff},
-		{"info", "off", slog.LevelInfo, levelOff},
-		{"off", "error", levelOff, slog.LevelError},
-		{"bogus", "", slog.LevelInfo, slog.LevelInfo},
+	all := []slog.Level{slog.LevelDebug, slog.LevelInfo, slog.LevelWarn, slog.LevelError}
+	allowed := func(s levelSet) string {
+		var out string
+		for _, l := range all {
+			if s.allows(l) {
+				out += map[slog.Level]string{slog.LevelDebug: "D", slog.LevelInfo: "I", slog.LevelWarn: "W", slog.LevelError: "E"}[l]
+			}
+		}
+		return out
+	}
+	cases := []struct{ level, otel, stdout, otlp string }{
+		{"", "", "IWE", "IWE"},
+		{"debug", "", "DIWE", "DIWE"},
+		{"warn", "", "WE", "WE"},
+		{"off", "", "", ""},
+		{"info", "off", "IWE", ""},
+		{"off", "error", "", "E"},
+		{"bogus", "", "IWE", "IWE"},
+		{"", "info,error", "IWE", "IE"}, // a list is exactly those levels
+		{"info,error", "", "IE", "IE"},
+		{"debug, warn", "", "DW", "DW"},
+		{"error,error", "", "E", "E"},
+		{"info,bogus", "", "I", "I"},     // unknown entries are ignored
+		{"bogus,nope", "", "IWE", "IWE"}, // nothing valid: default
+		{"off,error", "", "E", "E"},      // off has no meaning inside a list
 	}
 	for _, c := range cases {
 		t.Setenv("CALENDAR_LOG_LEVEL", c.level)
 		t.Setenv("CALENDAR_OTEL_LOG_LEVEL", c.otel)
 		s, o := LogLevels()
-		if s != c.stdout || o != c.otlp {
-			t.Errorf("level=%q otel=%q: got %v/%v, want %v/%v", c.level, c.otel, s, o, c.stdout, c.otlp)
+		if allowed(s) != c.stdout || allowed(o) != c.otlp {
+			t.Errorf("level=%q otel=%q: got %q/%q, want %q/%q", c.level, c.otel, allowed(s), allowed(o), c.stdout, c.otlp)
 		}
 	}
 }
@@ -39,6 +53,17 @@ func TestNewLoggerHonoursLevel(t *testing.T) {
 	l.Error("shown")
 	if out := buf.String(); strings.Contains(out, "hidden") || !strings.Contains(out, "shown") {
 		t.Fatalf("level error should keep only errors, got %q", out)
+	}
+
+	buf.Reset()
+	t.Setenv("CALENDAR_LOG_LEVEL", "info,error")
+	l = NewLogger(&buf)
+	l.Debug("d")
+	l.Info("i-shown")
+	l.Warn("w-hidden")
+	l.Error("e-shown")
+	if out := buf.String(); strings.Contains(out, `"d"`) || strings.Contains(out, "w-hidden") || !strings.Contains(out, "i-shown") || !strings.Contains(out, "e-shown") {
+		t.Fatalf("list info,error should keep exactly info and error, got %q", out)
 	}
 
 	buf.Reset()

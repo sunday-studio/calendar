@@ -194,7 +194,7 @@ nothing set, the hub starts no exporter and makes no network calls. The containe
    # OTEL_RESOURCE_ATTRIBUTES=deployment.environment=prod
    # OTEL_TRACES_SAMPLER=parentbased_always_on                    # or parentbased_traceidratio with OTEL_TRACES_SAMPLER_ARG=0.25
    # OTEL_METRIC_EXPORT_INTERVAL=60000                            # ms
-   # CALENDAR_LOG_LEVEL=info                                      # debug | info | warn | error | off (stdout and OTLP)
+   # CALENDAR_LOG_LEVEL=info                                      # debug | info | warn | error | off (a minimum), or a list like info,error (exactly those)
    # CALENDAR_OTEL_LOG_LEVEL=                                     # OTLP logs only; defaults to CALENDAR_LOG_LEVEL
    # One signal off: OTEL_TRACES_EXPORTER=none | OTEL_METRICS_EXPORTER=none | OTEL_LOGS_EXPORTER=none
    # Everything off: OTEL_SDK_DISABLED=true

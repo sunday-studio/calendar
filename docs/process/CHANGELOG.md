@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Added
+- `CALENDAR_LOG_LEVEL` and `CALENDAR_OTEL_LOG_LEVEL` also take a comma-separated list, such as `info,error`, which lets
+  through exactly those levels (and not warnings). A single level still means "that level and above".
+
 ## [0.1.2] - 2026-10-30
 
 ### Added

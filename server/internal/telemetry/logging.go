@@ -16,7 +16,7 @@ import (
 // scrubbed and sensitive keys dropped. Call it after Setup.
 func NewLogger(w io.Writer) *slog.Logger {
 	stdoutLevel, otlpLevel := LogLevels()
-	base := slog.NewJSONHandler(w, &slog.HandlerOptions{Level: stdoutLevel})
+	base := levelHandler{stdoutLevel, slog.NewJSONHandler(w, &slog.HandlerOptions{Level: slog.LevelDebug})}
 	plain := slog.New(traceHandler{base})
 	plainLog.Store(plain)
 	var h slog.Handler = traceHandler{base}

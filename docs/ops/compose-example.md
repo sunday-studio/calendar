@@ -151,8 +151,8 @@ Telemetry (OpenTelemetry). Off unless an OTLP endpoint is set; with none set the
 | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, `_METRICS_ENDPOINT`, `_LOGS_ENDPOINT` | none | Per-signal full URLs; one alone enables only that signal. |
 | `OTEL_EXPORTER_OTLP_HEADERS` | none | `key=value,key2=value2` for the backend's auth. A space inside a value is `%20`. It is a secret. |
 | `CALENDAR_OTEL_TOKEN` | none | Shortcut for the common case: a bearer token, sent as `Authorization: Bearer <token>`. Optional; an `Authorization` entry in `OTEL_EXPORTER_OTLP_HEADERS` wins. A secret. |
-| `CALENDAR_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` or `off`. Applies to the stdout log and the OTLP logs. `off` silences all of it. |
-| `CALENDAR_OTEL_LOG_LEVEL` | same as `CALENDAR_LOG_LEVEL` | Level for the OTLP logs only, e.g. keep stdout at `info` and export only `error`. |
+| `CALENDAR_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` or `off`, taken as a minimum (`info` lets info, warn and error through). A comma-separated list, such as `info,error`, lets through exactly those levels. Applies to the stdout log and the OTLP logs. `off` silences all of it. |
+| `CALENDAR_OTEL_LOG_LEVEL` | same as `CALENDAR_LOG_LEVEL` | Level for the OTLP logs only, same syntax. For example keep stdout at `info` and export `info,error`. |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` | Or `grpc`. |
 | `OTEL_SERVICE_NAME` | `calendard` | Service name in the backend. |
 | `OTEL_RESOURCE_ATTRIBUTES` | none | e.g. `deployment.environment=prod`. |
