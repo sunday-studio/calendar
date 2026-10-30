@@ -29,6 +29,7 @@ struct HomeView: View {
 
     struct PendingMove: Equatable { var item: AgendaItem; var start: Date; var end: Date }
     @State private var offlineToast = false
+    @State private var syncRuleVisible = false
     @State private var confirmForget = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -39,7 +40,19 @@ struct HomeView: View {
         ZStack(alignment: .bottomTrailing) {
             VStack(spacing: 0) {
                 titleRow
-                if model.showProgress || writing { ProgressRule().accessibilityLabel(writing ? "Saving" : "Syncing") }
+                // The slot is always 2pt tall, so the list never moves. The rule itself shows only for a sync that lasts
+                // (not for the quick refresh that follows every poll), and not at all while the "Syncing N accounts" row
+                // below has its own bar.
+                Group {
+                    if syncRuleVisible || writing { ProgressRule().accessibilityLabel(writing ? "Saving" : "Syncing") }
+                    else { Color.clear }
+                }
+                .frame(height: 2)
+                .task(id: model.showProgress && model.syncingProgress == nil) {
+                    let on = model.showProgress && model.syncingProgress == nil
+                    try? await Task.sleep(for: on ? .seconds(1) : .milliseconds(400))
+                    if !Task.isCancelled { syncRuleVisible = on }
+                }
                 ZStack {
                     if mode == .agenda { agendaScroll.transition(.opacity) }
                     else { boardArea.id(mode).transition(.opacity) }
