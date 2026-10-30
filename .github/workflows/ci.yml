@@ -35,7 +35,7 @@ jobs:
     outputs:
       ios: ${{ steps.f.outputs.ios }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v3
         id: f
         with:
@@ -54,7 +54,7 @@ jobs:
       run:
         working-directory: server
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26'          # the newest 1.26.x: the go.mod line is only the minimum and would pin 1.26.0 (stdlib CVEs)
@@ -75,13 +75,13 @@ jobs:
     timeout-minutes: 15
     continue-on-error: true   # default linters only; flip this off once the first run is clean
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26'          # the newest 1.26.x: the go.mod line is only the minimum and would pin 1.26.0 (stdlib CVEs)
           check-latest: true
           cache-dependency-path: server/go.sum
-      - uses: golangci/golangci-lint-action@v8
+      - uses: golangci/golangci-lint-action@v9
         with:
           version: latest
           working-directory: server
@@ -91,7 +91,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26'          # the newest 1.26.x: the go.mod line is only the minimum and would pin 1.26.0 (stdlib CVEs)
@@ -113,7 +113,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Pick an iPhone simulator
@@ -151,7 +151,7 @@ jobs:
           find ~/Library/Developer/Xcode/DerivedData -name '*.xcresult' -exec cp -R {} "$RUNNER_TEMP/xcresult/" \; 2>/dev/null || true
       - name: Upload xcresult
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: xcresult
           path: ${{ runner.temp }}/xcresult
