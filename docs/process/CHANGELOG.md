@@ -6,40 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
-Everything here is built and tested against fakes, like 0.1.0; nothing is verified on a physical device or against real Google.
+## [0.1.0] - 2026-10-30
 
-### Added
-- Env-only deployment: `CALENDAR_APNS_KEY`, `CALENDAR_GOOGLE_CLIENT_ID` and `CALENDAR_GOOGLE_CLIENT_SECRET` accept the
-  APNs key and the Google client as values (the file variables still win), `deploy/compose.image.yaml` runs the published
-  image from one env file, and `docs/ops/compose-example.md` lists every variable including telemetry.
-- OpenTelemetry for the hub: traces, metrics and logs over OTLP, off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set,
-  configured only through standard `OTEL_*` variables (see [observability.md](../engineering/observability.md)).
-  `calendard doctor` reports and probes it.
-- Local run and demo mode: `scripts/run-local.sh` runs the real hub with persistent data, logs and an issue log;
-  `scripts/run-local.sh demo` runs it against the fake Google with its own database (docs/ops/local-run.md).
-- Rich demo data and scenarios: a `rich` profile for the fake Google (four accounts, every UI state, odd time zones,
-  DST edges, long and unusual text) and `scripts/run-local.sh scenario` to trigger sync states such as re-auth,
-  outages, rate limits, outside edits and bursts (docs/ops/demo-data.md).
-- Widgets and notifications v2 design and spec (docs/specs/widgets-notifications.md); widgets phase 1 (small,
-  medium, large agenda, states) is built.
-- Documentation: README rewrite with screenshots, architecture and write-flow diagrams, an assets folder
-  (`docs/assets`) and `scripts/screenshots.sh`, which regenerates the screenshots from the real app.
-
-### Changed
-- The image listens on `0.0.0.0:8787` by default (it had a Tailscale address baked in); compose files publish it on loopback only.
-- Debug builds of the iOS app allow plain http to Tailscale addresses; Release builds are unchanged.
-- Pairing: an address typed without a scheme gets `http://` for private and Tailscale addresses (and `https://`
-  otherwise), and a failed pairing shows the attempted URL and the system error code.
-- Repo cleanup: all documents moved into `docs/`, `GNUmakefile` folded into `Makefile`, unused server code, iOS
-  code, tokens and the Newsreader font removed.
-
-### Fixed
-- Quick add, free time and search follow the 24-hour clock preference.
-
-## [0.1.0] - 2026-10-23
-
-First tagged version. Everything below was built and tested against fakes (a fake Google, fixtures, the iOS
-simulator); see Known limitations.
+First release. The hub and the iOS app were run end to end on a real Google account, over Tailscale, on a physical
+iPhone: create, edit, delete with Undo, RSVP, guests, Meet links, all-day and repeating events, single-occurrence
+edits and read-only calendars, plus push (silent wake, moved, cancelled and invitation alerts).
 
 ### Added
 - Hub (`calendard`, Go, SQLite): Google Calendar connection with OAuth/PKCE, encrypted token storage under a
@@ -61,14 +32,48 @@ simulator); see Known limitations.
 - Design system (CalendarUI): tokens, components, light and dark, large-type support.
 - CI: server vet, race tests and govulncheck, fake-Google end-to-end, iOS build and tests, multi-arch image
   publishing to GHCR with SBOM and provenance.
+- Env-only deployment: `CALENDAR_APNS_KEY`, `CALENDAR_GOOGLE_CLIENT_ID` and `CALENDAR_GOOGLE_CLIENT_SECRET` accept the
+  APNs key and the Google client as values (the file variables still win), `deploy/compose.image.yaml` runs the published
+  image from one env file, and `docs/ops/compose-example.md` lists every variable including telemetry.
+- OpenTelemetry for the hub: traces, metrics and logs over OTLP, off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set,
+  configured only through standard `OTEL_*` variables (see [observability.md](../engineering/observability.md)).
+  `calendard doctor` reports and probes it.
+- Local run and demo mode: `scripts/run-local.sh` runs the real hub with persistent data, logs and an issue log;
+  `scripts/run-local.sh demo` runs it against the fake Google with its own database (docs/ops/local-run.md).
+- Rich demo data and scenarios: a `rich` profile for the fake Google (four accounts, every UI state, odd time zones,
+  DST edges, long and unusual text) and `scripts/run-local.sh scenario` to trigger sync states such as re-auth,
+  outages, rate limits, outside edits and bursts (docs/ops/demo-data.md).
+- Widgets and notifications v2 design and spec (docs/specs/widgets-notifications.md); widgets phase 1 (small,
+  medium, large agenda, states) is built.
+- Documentation: README rewrite with screenshots, architecture and write-flow diagrams, an assets folder
+  (`docs/assets`) and `scripts/screenshots.sh`, which regenerates the screenshots from the real app.
+- Push alerts name the event: cancelled and invited notifications are rewritten on the phone from a new
+  `GET /v1/events/{id}/brief`, so titles never travel through Apple. A new invitation raises an alert (Settings, Alerts,
+  New invitations).
+
+### Changed
+- The image listens on `0.0.0.0:8787` by default (it had a Tailscale address baked in); compose files publish it on loopback only.
+- Debug builds of the iOS app allow plain http to Tailscale addresses; Release builds are unchanged.
+- Pairing: an address typed without a scheme gets `http://` for private and Tailscale addresses (and `https://`
+  otherwise), and a failed pairing shows the attempted URL and the system error code.
+- Repo cleanup: all documents moved into `docs/`, `GNUmakefile` folded into `Makefile`, unused server code, iOS
+  code, tokens and the Newsreader font removed.
+
+### Fixed
+- Quick add, free time and search follow the 24-hour clock preference.
+- Events created in the app are accepted by Google (client-chosen ids are lowercase base32hex).
+- The sync cadence is re-read on every wake, so polling no longer stalls on the slow interval.
+- The event detail page asks the hub to poll before refreshing.
+- A guest typed in the people screen and not submitted is kept when you leave it.
 
 ### Known limitations
-- Nothing has been run against real Google yet (needs your Google Cloud project, DECISIONS.md H1 and H6).
-- iOS push, widgets and the App Group have not been verified on a physical device; push needs an APNs key.
+- Google answers `fullSyncRequired` to the stored sync token on every poll for some calendars, so those calendars
+  resync fully each time. Correct, but wasteful; under investigation.
+- Offline save, conflict ("Changed elsewhere"), drag and resize, revoking access and moving between calendars have not
+  been walked on a real account yet (docs/ops/SMOKE.md).
+- Widgets update after every sync and at event boundaries; with the app closed they depend on iOS letting a silent push or
+  background refresh through.
 - The Week view was removed at the author's request; the views are Agenda, Day and 3 days.
-- The Docker image and the GitHub workflows have not been run on GitHub; the image has not been built (no Docker daemon was
-  available while writing it).
-- Custom repeat form and the Home draft row are open items (DECISIONS.md D S7).
 - Quick add runs on rules only until the alfather contract is confirmed (H9).
 
 [Unreleased]: https://github.com/sunday-studio/calendar/compare/v0.1.0...HEAD
