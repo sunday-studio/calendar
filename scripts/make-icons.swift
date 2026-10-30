@@ -60,6 +60,34 @@ for ic in icons {
     }, to: "\(assets)/AppIcon.appiconset/\(ic.name).png")
 }
 
+// Dev icon (Debug builds only): amber ground and a DEV band, so it never reads as the production app on a home screen.
+let devSet = "\(assets)/AppIcon-Dev.appiconset"
+try? FileManager.default.createDirectory(atPath: devSet, withIntermediateDirectories: true)
+png(1024, 1024, opaque: true, { ctx in
+    ctx.setFillColor(rgb(0xF0B84A)); ctx.fill(CGRect(x: 0, y: 0, width: 1024, height: 1024))
+    let cw: CGFloat = 148, ch: CGFloat = 340, gap: CGFloat = 14
+    let total = CGFloat(text.count) * cw + CGFloat(text.count - 1) * gap
+    let x0 = (1024 - total) / 2, y0: CGFloat = 150
+    for (i, c) in text.enumerated() {
+        let r = CGRect(x: x0 + CGFloat(i) * (cw + gap), y: y0, width: cw, height: ch)
+        ctx.setFillColor(rgb(0x0A0A0B)); ctx.fill(r)
+        ctx.setFillColor(rgb(0xF0B84A)); ctx.fill(CGRect(x: r.minX, y: r.midY - 5, width: cw, height: 10))
+        glyph(ctx, String(c), size: 190, in: r, color: rgb(0xF4F1EA))
+    }
+    let band = CGRect(x: 0, y: 700, width: 1024, height: 190)
+    ctx.setFillColor(rgb(0x0A0A0B)); ctx.fill(band)
+    glyph(ctx, "DEV", size: 150, in: band, color: rgb(0xF0B84A))
+}, to: "\(devSet)/AppIcon-dev.png")
+try? """
+{
+  "images" : [
+    { "filename" : "AppIcon-dev.png", "idiom" : "universal", "platform" : "ios", "size" : "1024x1024" }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 }
+}
+
+""".write(toFile: "\(devSet)/Contents.json", atomically: true, encoding: .utf8)
+
 // Launch wordmark: CALENDAR, xl cells 26.4 x 60 pt (glyph 44), 2pt gap included in the pitch.
 for scale in [2, 3] {
     let s = CGFloat(scale)

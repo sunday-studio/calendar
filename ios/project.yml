@@ -57,6 +57,9 @@ targets:
       - target: CalendarNotificationService
       - target: CalendarNotificationContent
     settings:
+      configs:
+        Debug:
+          ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon-Dev   # amber "DEV" icon, so a dev build is never mistaken for the real app
       base:
         PRODUCT_BUNDLE_IDENTIFIER: studio.thesunday.calendar
         PRODUCT_NAME: Calendar
