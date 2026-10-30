@@ -310,7 +310,7 @@ struct PeopleEditor: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScreenNav("People", leading: .back, trailing: "Done", onLeading: { dismiss() }, onTrailing: { dismiss() })
+            ScreenNav("People", leading: .back, trailing: "Done", onLeading: { _ = model.commitPendingGuest(text); dismiss() }, onTrailing: finish)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     LabeledField("Add", error: error, isFocused: focus) {
@@ -336,6 +336,11 @@ struct PeopleEditor: View {
         .background(Color.calBg)
         .toolbar(.hidden, for: .navigationBar)
         .task { focus = true }
+    }
+
+    /// Done keeps an address that was typed but not submitted; one that is not an address stays on screen with the reason.
+    private func finish() {
+        if model.commitPendingGuest(text) { dismiss() } else { error = "That doesn\u{2019}t look like a new email address." }
     }
 
     private func add() {

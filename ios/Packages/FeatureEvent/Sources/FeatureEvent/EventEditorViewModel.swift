@@ -165,6 +165,12 @@ public final class EventEditorViewModel {
         fields.attendees.append(e)
         return true
     }
+    /// What is still typed in the guest field when the person leaves the People screen. Nothing typed is fine; an address
+    /// is added; anything else is refused so the screen can say so instead of silently dropping it.
+    public func commitPendingGuest(_ raw: String) -> Bool {
+        let e = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return e.isEmpty || addAttendee(e)
+    }
     public func removeAttendee(_ email: String) { fields.attendees.removeAll { $0 == email } }
 
     // MARK: Derived

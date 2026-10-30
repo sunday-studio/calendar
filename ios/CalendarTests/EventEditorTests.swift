@@ -101,6 +101,17 @@ private func detail(version: Int64 = 4, recurring: Bool = false, title: String =
         #expect(vm.fields.attendees.isEmpty)
     }
 
+    @Test func aGuestTypedButNotSubmittedIsKeptWhenLeavingThePeopleScreen() {
+        let vm = creator(FakeWriter([]))
+        #expect(vm.commitPendingGuest(""))                       // nothing typed: nothing to do
+        #expect(vm.fields.attendees.isEmpty)
+        #expect(vm.commitPendingGuest(" sam@x.com "))            // typed, Done tapped without Return
+        #expect(vm.fields.attendees == ["sam@x.com"])
+        #expect(!vm.commitPendingGuest("not an address"))        // refused, so the screen can say why
+        #expect(!vm.commitPendingGuest("SAM@x.com"))             // already there
+        #expect(vm.fields.attendees == ["sam@x.com"])
+    }
+
     @Test func saveSendsDraftAndMarksSaved() async {
         let w = FakeWriter([.saved(detail())])
         let vm = creator(w)
