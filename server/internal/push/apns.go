@@ -21,6 +21,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -130,6 +131,19 @@ func LoadAPNsFiles(keyFile, keyID, teamID, topic string) (*APNs, error) {
 		return nil, err
 	}
 	return NewAPNs(APNsConfig{KeyPEM: b, KeyID: keyID, TeamID: teamID, Topic: topic})
+}
+
+// LoadAPNsValue takes the .p8 as a value, for hosts where an env var is easier than a file: the PEM itself, the PEM on
+// one line with literal \n, or base64 of the file.
+func LoadAPNsValue(value, keyID, teamID, topic string) (*APNs, error) {
+	v := strings.TrimSpace(value)
+	if !strings.Contains(v, "BEGIN") {
+		if b, err := base64.StdEncoding.DecodeString(v); err == nil {
+			v = string(b)
+		}
+	}
+	v = strings.ReplaceAll(v, `\n`, "\n")
+	return NewAPNs(APNsConfig{KeyPEM: []byte(v), KeyID: keyID, TeamID: teamID, Topic: topic})
 }
 
 func (a *APNs) now() time.Time {

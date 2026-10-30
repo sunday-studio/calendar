@@ -11,7 +11,7 @@ FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/calendard /usr/local/bin/calendard
 # a new named volume inherits this ownership, so the non-root user can write /data
 COPY --from=build --chown=nonroot:nonroot /data-seed /data
-ENV CALENDAR_ADDR=100.127.10.66:8787 CALENDAR_DB=/data/calendar.db
+ENV CALENDAR_ADDR=0.0.0.0:8787 CALENDAR_DB=/data/calendar.db
 VOLUME /data
 USER nonroot:nonroot
 ENTRYPOINT ["calendard"]

@@ -145,6 +145,11 @@ func serve(ctx context.Context, cfg *config.Config) error {
 		if cfg.PublicURL == "" {
 			return errors.New("CALENDAR_PUBLIC_URL is required when CALENDAR_GOOGLE_CLIENT_FILE is set")
 		}
+	case cfg.GoogleClientID != "" && cfg.GoogleClientSecret != "":
+		cf = &oauth.ClientFile{ClientID: cfg.GoogleClientID, ClientSecret: cfg.GoogleClientSecret}
+		if cfg.PublicURL == "" {
+			return errors.New("CALENDAR_PUBLIC_URL is required when the Google client is set")
+		}
 	case cfg.Dev && cfg.GoogleTokenURL != "":
 		// end-to-end against a fake Google: no real client needed
 		cf = &oauth.ClientFile{ClientID: "fake-client", ClientSecret: "fake-secret"}
@@ -169,14 +174,12 @@ func serve(ctx context.Context, cfg *config.Config) error {
 	broker := &stream.Broker{Rev: d.Rev, Log: log}
 	d.OnCommit(broker.PublishRev)
 	disp := &push.Dispatcher{DB: d, Log: log}
-	if cfg.APNsKeyFile != "" {
-		ap, err := push.LoadAPNsFiles(cfg.APNsKeyFile, cfg.APNsKeyID, cfg.APNsTeamID, cfg.APNsTopic)
-		if err != nil {
-			return fmt.Errorf("apns: %w", err)
-		}
+	if ap, err := loadAPNs(cfg); err != nil {
+		return fmt.Errorf("apns: %w", err)
+	} else if ap != nil {
 		disp.Sender = ap
 	} else {
-		log.Warn("CALENDAR_APNS_KEY_FILE not set: push notifications disabled")
+		log.Warn("CALENDAR_APNS_KEY_FILE / CALENDAR_APNS_KEY not set: push notifications disabled")
 	}
 	d.OnCommit(disp.Notify)
 	acc.OnStatus = func(id, status string) {
@@ -329,4 +332,15 @@ func tokenCmd(ctx context.Context, cfg *config.Config, args []string, out io.Wri
 		return errors.New(usage)
 	}
 	return nil
+}
+
+// loadAPNs builds the APNs sender from the key file, else from the key value; nil with no error means push is off.
+func loadAPNs(cfg *config.Config) (*push.APNs, error) {
+	switch {
+	case cfg.APNsKeyFile != "":
+		return push.LoadAPNsFiles(cfg.APNsKeyFile, cfg.APNsKeyID, cfg.APNsTeamID, cfg.APNsTopic)
+	case cfg.APNsKey != "":
+		return push.LoadAPNsValue(cfg.APNsKey, cfg.APNsKeyID, cfg.APNsTeamID, cfg.APNsTopic)
+	}
+	return nil, nil
 }

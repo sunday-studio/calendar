@@ -15,7 +15,6 @@ import (
 	"calendar/server/internal/config"
 	"calendar/server/internal/db"
 	"calendar/server/internal/oauth"
-	"calendar/server/internal/push"
 	"calendar/server/internal/rekey"
 	"calendar/server/internal/vault"
 )
@@ -183,21 +182,26 @@ func doctorCmd(ctx context.Context, cfg *config.Config, out io.Writer) error {
 			warn("last backup", "never; set CALENDAR_BACKUP_DIR or run `calendard backup`")
 		}
 	}
-	if cfg.GoogleClientFile == "" {
-		warn("google sign-in", "CALENDAR_GOOGLE_CLIENT_FILE not set: accounts cannot be connected")
+	hasValues := cfg.GoogleClientID != "" && cfg.GoogleClientSecret != ""
+	if cfg.GoogleClientFile == "" && !hasValues {
+		warn("google sign-in", "CALENDAR_GOOGLE_CLIENT_FILE (or _ID and _SECRET) not set: accounts cannot be connected")
 	} else {
-		_, err := oauth.LoadClientFile(cfg.GoogleClientFile)
-		add("google client file", err, cfg.GoogleClientFile)
+		var err error
+		if cfg.GoogleClientFile != "" {
+			_, err = oauth.LoadClientFile(cfg.GoogleClientFile)
+			add("google client file", err, cfg.GoogleClientFile)
+		} else {
+			add("google client", nil, "from CALENDAR_GOOGLE_CLIENT_ID and _SECRET")
+		}
 		if err == nil && cfg.PublicURL == "" {
 			add("public url", errors.New("CALENDAR_PUBLIC_URL is required when Google is enabled"), "")
 		} else if err == nil {
 			add("public url", nil, strings.TrimRight(cfg.PublicURL, "/")+"/auth/google/callback (must match the Google redirect URI)")
 		}
 	}
-	if cfg.APNsKeyFile == "" {
-		warn("push", "CALENDAR_APNS_KEY_FILE not set: no notifications")
+	if ap, err := loadAPNs(cfg); ap == nil && err == nil {
+		warn("push", "CALENDAR_APNS_KEY_FILE / CALENDAR_APNS_KEY not set: no notifications")
 	} else {
-		_, err := push.LoadAPNsFiles(cfg.APNsKeyFile, cfg.APNsKeyID, cfg.APNsTeamID, cfg.APNsTopic)
 		add("apns key", err, "topic "+cfg.APNsTopic)
 	}
 	if cfg.BackupDir != "" {
