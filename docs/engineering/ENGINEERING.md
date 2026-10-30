@@ -944,13 +944,13 @@ Estimates are focused working days for one developer, including tests. Total ≈
 | **M4 Act** (E5) | Write | events svc, idempotency, scopes, RSVP, Meet, move, delete+undo | New/edit forms (E1–E11), RSVP (R1–R7), delete/undo (D5–D9) | 14 | Create/edit/RSVP/delete on all providers; conflict + failure paths pass |
 | **M5 Glanceable** (E6) | Widgets, reminders, week + drag | APNs sender, reminder overrides, summary push | Widgets (W1–W2), local notifications + NSE (W3, W5–W7), 3-day/Week + drag/resize (V1–V8), 2nd tz | 14 | Move an event by drag; reminders fire with Join; widget correct after sync |
 | **M6 Automate** (E7) | API + AI | tokens UI endpoints, `freetime`, quick-add, MCP server/client, automations, FTS5 | Quick add (Q1–Q10), search (F1–F3), tokens/status screens (Y1–Y8), App Intents | 12 | "lunch with Sam fri 1pm" → event; script can read agenda with a read-only token |
-| **M7 Cut over** (E8) | Parity and exit | backup verification, hardening, runbook | polish, a11y pass, TestFlight build | 6 | Parity checklist green 2 weeks; Notion Calendar access revoked |
+| **M7 Cut over** (E8) | Parity and exit | backup verification, hardening, runbook | polish, a11y pass, TestFlight build | 6 | Parity checklist green 2 weeks; old app access revoked |
 
 ### Ordering notes
 
 - Server and app tracks run **in parallel after M0**: build the app against a **fixture hub** (`calendard serve --fixtures`) so the UI doesn't wait for real sync.
 - Lock `api/openapi.yaml` at the end of M0 for the M1–M3 endpoints; later endpoints are added additively.
-- Use real Notion Calendar alongside from M3 until M7.
+- Keep using the old calendar app alongside from M3 until M7.
 
 ---
 

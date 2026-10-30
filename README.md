@@ -5,7 +5,7 @@
 <h1 align="center">Calendar</h1>
 
 <p align="center">
-  A home-server hub and a native iPhone app that replace Notion Calendar.<br>
+  A home-server hub and a native iPhone app that give you a calendar of your own.<br>
   Your calendars stay on your server; the phone talks only to it.
 </p>
 
@@ -13,22 +13,21 @@
   <img src="docs/assets/hero.png" alt="Home, Day and event detail screens of the iPhone app" width="760">
 </p>
 
-> **Status:** v0.1.0 (pre-release), built and tested against a fake Google and the iOS simulator. Not yet run
-> against real Google on a real iPhone. Private repository. See [Status and limitations](#status-and-limitations).
+> **Status:** v0.1.0. Run end to end on a real Google account, over Tailscale, on a physical iPhone. A few paths are
+> still unwalked; see [Limitations](#limitations).
 
 ## What it is
 
 - **The hub (`calendard`)** is a small Go service you run on a home server. It signs in to your calendar accounts,
   keeps one synced copy in SQLite, and writes your changes back to the provider. Provider tokens never leave it.
-- **The app** is a native SwiftUI app (iOS 26) that reads and edits that copy over a token API. It also has
-  widgets, notifications and a Live Activity (built, not verified on a device).
-- **Scripts and agents** use the same API with their own tokens, and an MCP endpoint (built against a fake).
+- **The app** is a native SwiftUI app (iOS 26) that reads and edits that copy over a token API, with widgets,
+  notifications and a Live Activity.
+- **Scripts and agents** use the same API with their own tokens, and an MCP endpoint.
 
 ## Screenshots
 
-Taken from the real app against a throwaway hub with the rich demo data (`scripts/screenshots.sh`). The capture
-clock was Saturday 24 October, about 13:40 (the status bar is set to 9:41); the next-event block, the "now" line
-and the invitation count depend on the moment of capture.
+Taken from the real app against a throwaway hub with demo data (`scripts/screenshots.sh`). The capture clock was
+Saturday 24 October, about 13:40; the status bar is set to 9:41.
 
 <table>
   <tr>
@@ -56,16 +55,16 @@ are design mocks, not device captures: [docs/assets/design](docs/assets/design).
 
 ## Features
 
-- Google Calendar accounts, read and write (create, edit, delete with Undo, move between calendars, RSVP, Meet
-  links), with idempotency keys and conflict handling. ICS links, read only.
-- Agenda, Day and 3-day views, month picker, recurring events with exceptions, free time search, full-text search.
-- Quick add from text with a rule-based parser (an alfather adapter is built against a fake; the real tool names
-  are not confirmed).
+- Google Calendar accounts, read and write: create, edit, delete with Undo, move between calendars, RSVP, guests, Meet
+  links, all-day and recurring events (including single-occurrence edits), with idempotency keys and conflict
+  handling. ICS links, read only.
+- Agenda, Day and 3-day views, month picker, free time search, full-text search.
+- Quick add from text with a rule-based parser (an alfather adapter exists; its real tool names are unconfirmed).
 - Offline reading from the saved copy, with clear banners when the hub or the phone is offline.
-- Widgets, rich notifications with a service extension, a Live Activity and App Intents: built, **not verified on
-  a device** (real push needs an APNs key, widgets need the App Group).
-- Token API with read/write/admin scopes, an MCP endpoint, encrypted verified backups, OpenTelemetry export
-  (off unless configured).
+- Push through APNs: a silent wake keeps the app current, and alerts for moved, cancelled and new-invitation events
+  are worded on the phone, so event titles never travel through Apple. Widgets, a Live Activity and App Intents.
+- Token API with read/write/admin scopes, an MCP endpoint, encrypted verified backups, and OpenTelemetry export
+  (off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set; see [observability](docs/engineering/observability.md)).
 
 ## Architecture
 
@@ -85,7 +84,7 @@ flowchart LR
   HUB <--> DB
   APP <-->|"token API and SSE over Tailscale"| HUB
   AGENT <-->|"token API and MCP"| HUB
-  HUB -->|"push, unverified"| APNS
+  HUB -->|"push"| APNS
   APNS --> APP
 ```
 
@@ -143,17 +142,14 @@ checklist: [docs/ops/local-run.md](docs/ops/local-run.md) and [docs/ops/demo-dat
 
 ## Deploy with Docker
 
-The hub runs as a Compose stack on a home server, with the host's Tailscale providing HTTPS. Nothing is exposed to
-the public internet. Follow [docs/ops/first-run.md](docs/ops/first-run.md) (Google Cloud project, secrets, build,
-HTTPS, pairing, backups), and see [docs/ops/deploy.md](docs/ops/deploy.md) for the files and every environment
-variable. Day-two tasks are in [docs/ops/RUNBOOK.md](docs/ops/RUNBOOK.md). The image has not been built yet (no
-Docker daemon was available while it was written).
+Each release publishes a multi-arch image, `ghcr.io/sunday-studio/calendar-hub:<version>`, and a GitHub Release with
+a deploy bundle. The hub is meant to sit behind HTTPS on your tailnet; nothing is exposed to the public internet.
 
-## Telemetry
-
-The hub can export traces, metrics and logs over OpenTelemetry. It is off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is
-set, and it is configured only through standard `OTEL_*` environment variables. See
-[docs/engineering/observability.md](docs/engineering/observability.md).
+- Everything as environment values, no secret files: [docs/ops/compose-example.md](docs/ops/compose-example.md)
+  (compose file, every variable and its default, telemetry included).
+- Mac mini with secret files and a build from source: [docs/ops/first-run.md](docs/ops/first-run.md).
+- Files and variables: [docs/ops/deploy.md](docs/ops/deploy.md). Backups, restore, rollback and other day-two
+  tasks: [docs/ops/RUNBOOK.md](docs/ops/RUNBOOK.md).
 
 ## Testing
 
@@ -173,14 +169,16 @@ Start at [docs/README.md](docs/README.md). Good entry points: [STATUS](docs/proc
 [CHANGELOG](docs/process/CHANGELOG.md), [ENGINEERING](docs/engineering/ENGINEERING.md),
 [DECISIONS](docs/process/DECISIONS.md) (including what only the owner can do), [RELEASING](docs/ops/RELEASING.md).
 
-## Status and limitations
+## Limitations
 
-- Nothing has been run against real Google yet; that needs your own Google Cloud project.
-- Push, widgets, Live Activity and the App Group have not been verified on a physical device.
-- CI is switched off on purpose; the workflows in `.github/` have known failures listed in [docs/ops/ci.md](docs/ops/ci.md).
-- The Docker image has not been built or published.
-- No license has been set; all rights are reserved until one is chosen.
+- Not yet walked on a real account: offline save, the "changed elsewhere" conflict, drag and resize, revoking access,
+  and moving events between calendars ([docs/ops/SMOKE.md](docs/ops/SMOKE.md)).
+- Google answers `fullSyncRequired` to the stored sync token for some calendars, so those resync fully on every poll.
+  Correct, but wasteful.
+- With the app closed, widgets update only when iOS lets a silent push or background refresh through.
 - Only Google and ICS providers exist. The welcome screen still mentions Outlook and iCloud (DECISIONS Q6).
+- CI is switched off; the workflows in `.github/` have known failures listed in [docs/ops/ci.md](docs/ops/ci.md).
+- No license has been set; all rights are reserved until one is chosen.
 
 ## Contributing
 

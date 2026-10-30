@@ -4,7 +4,7 @@ _Based on [RESEARCH.md](RESEARCH.md) (rev 3) · 2026-10-10_
 
 ## Vision
 
-Replace Notion Calendar with **my own calendar**:
+Build **my own calendar**:
 - my **home server** connects to all my accounts, keeps everything in sync, and exposes **my own API**;
 - a **custom-UI mobile app** shows what's coming up and lets me act on events;
 - my own **scripts, automations and agents** can use the calendar too.
@@ -49,7 +49,7 @@ As the owner, I want my phone to reach my home server over HTTPS without exposin
 - [ ] `GET /health` returns 200 from the phone over Tailscale, and fails off-tailnet
 
 **US-0.2 · Register my own Google app**
-As the owner, I want my own Google OAuth app, so that I can sign in to Google from my app instead of Notion's.
+As the owner, I want my own Google OAuth app, so that I can sign in to Google from my own app.
 - [ ] Google Cloud project with the Calendar API enabled
 - [ ] Consent screen is External and **In production** (not Testing → avoids 7-day token expiry)
 - [ ] Web OAuth client with the redirect `https://<server>.ts.net/auth/google/callback` accepted by Google
@@ -231,7 +231,7 @@ As a user, I want to drag events to reschedule and resize them to change their d
 
 **US-6.4 · Next meeting on the lock screen** _(iOS Live Activity / Android ongoing notification, nice-to-have)_
 
-**US-6.5 · Multiple timezones** _(nice-to-have, a Notion Calendar feature)_
+**US-6.5 · Multiple timezones** _(nice-to-have)_
 - [ ] A secondary timezone column in the day/week views
 
 ---
@@ -265,15 +265,15 @@ As the owner, I want server-side hooks, e.g. "on event start → run Home Assist
 
 ---
 
-## E8 — Cut over from Notion Calendar
+## E8 — Cut over
 
 **US-8.1 · Parity checklist**
-As a user, I want to confirm my app covers what I use daily in Notion Calendar before switching.
+As a user, I want to confirm my app covers what I use daily before I rely on it.
 - [ ] List the features I actually use; each is either covered or consciously dropped
 
-**US-8.2 · Remove Notion's access**
-- [ ] Revoke Notion Calendar in Google account → Security → Third-party access, and in the Microsoft account → Apps
-- [ ] Uninstall Notion Calendar
+**US-8.2 · Retire the old calendar app**
+- [ ] Revoke the old app's access in each Google account → Security → Third-party access, and in the Microsoft account → Apps
+- [ ] Uninstall it
 
 ---
 
@@ -301,7 +301,7 @@ As a user, I want to confirm my app covers what I use daily in Notion Calendar b
 
 ## Suggested order of work
 
-1. **M0 → M3** (foundations, connect, sync, read-only app) is the first usable version. Use it alongside Notion Calendar.
-2. **M4** (actions) is when you can stop opening Notion Calendar for most tasks.
+1. **M0 → M3** (foundations, connect, sync, read-only app) is the first usable version. Use it alongside your current calendar app.
+2. **M4** (actions) is when you can stop opening your old calendar app for most tasks.
 3. **M5–M6** in any order, depending on whether glanceability or automation matters more.
 4. **M7** once the parity checklist is green.

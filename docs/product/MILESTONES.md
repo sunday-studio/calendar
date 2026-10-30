@@ -54,7 +54,7 @@ Total to cut-over: **~78 working days**. First daily-usable version (M3) lands a
 | M4 | Act | create, edit, move, delete, RSVP, add Meet from the app | 12 | E5 |
 | M5 | Glanceable | widgets, reminders, week view with drag & drop | 14 | E6 |
 | M6 | Automate | API tokens, free-time, quick add, search, Shortcuts, automations | 9 | E7 (no alfather) |
-| M7 | Cut over | stop using Notion Calendar | 5 | E8 |
+| M7 | Cut over | stop using the old calendar app | 5 | E8 |
 | M8 | alfather | type or speak natural language; agents use your calendar | 5 | 7.3, 7.6 |
 | M9 | Other providers | add Microsoft, iCloud, ICS (only if you need them) | 12 | 1.3, 1.4, 1.6 |
 
@@ -148,7 +148,7 @@ Total to cut-over: **~78 working days**. First daily-usable version (M3) lands a
 
 ## M3 · Read MVP — _14 days_ ★ start using it daily
 
-**Goal:** the app is a good enough glance calendar to replace opening Notion Calendar for looking things up.
+**Goal:** the app is a good enough glance calendar to replace opening the old calendar app for looking things up.
 
 **Server**
 - [ ] `GET /v1/agenda?from&to` with `ETag` from `rev`; `GET /v1/events/{id}`; `GET /v1/calendars`, `PATCH` (visible, colour override); `GET/PUT /v1/settings` (default calendar, week start, secondary tz, working hours)
@@ -169,7 +169,7 @@ Total to cut-over: **~78 working days**. First daily-usable version (M3) lands a
 - Launch to visible content from cache in < 0.5 s; fresh data within ~1 s on tailnet.
 - Hide a calendar → disappears everywhere; colour override sticks across relaunch and server restart.
 - Airplane mode: agenda still shown, clearly labelled stale; edits disabled.
-- A week of using it next to Notion Calendar with no missing events (this *is* the acceptance test).
+- A week of using it next to the old calendar app with no missing events (this *is* the acceptance test).
 
 **Depends on:** M2 (or fixture hub for early UI). **Stories:** 3.1–3.5, 4.1–4.3, 5.6.
 
@@ -264,17 +264,17 @@ Total to cut-over: **~78 working days**. First daily-usable version (M3) lands a
 
 ## M7 · Cut over — _5 days_
 
-**Goal:** Notion Calendar is gone.
+**Goal:** the old calendar app is gone.
 
-- [ ] Parity checklist (US-8.1): list what you actually use in Notion Calendar daily; each is *covered* or *consciously dropped*
-- [ ] Two weeks of daily use with Notion Calendar closed; log every miss and fix the top ones
+- [ ] Parity checklist (US-8.1): list what you actually use daily; each is *covered* or *consciously dropped*
+- [ ] Two weeks of daily use with the old calendar app closed; log every miss and fix the top ones
 - [ ] Hardening: backup restore drill, `govulncheck`, token rotation, log redaction check, upgrade rehearsal
 - [ ] Accessibility pass (VoiceOver over Home, Day, Event, Create), Dynamic Type max, Reduce Motion
 - [ ] TestFlight build installed on your phone (no 7-day expiry)
-- [ ] Revoke Notion Calendar's access in each Google account (Security → Third-party access); uninstall the app (US-8.2)
+- [ ] Revoke the old app's access in each Google account (Security → Third-party access); uninstall it (US-8.2)
 - [ ] Short runbook: reconnect an account, restore from backup, rotate master key and tokens, renew nothing (no Microsoft secret to track yet)
 
-**Exit criteria:** parity checklist green; Notion Calendar uninstalled and revoked; one successful restore from backup.
+**Exit criteria:** parity checklist green; old app uninstalled and revoked; one successful restore from backup.
 
 ---
 

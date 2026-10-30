@@ -1,11 +1,11 @@
 # Personal Calendar Hub — Research
 
-_Researched 2026-10-10 · revision 3 (replacing Notion Calendar; signing in to accounts is OK)_
+_Researched 2026-10-10 · revision 3 (own calendar app; signing in to accounts is OK)_
 
 ## The goal
 
-- **Replace Notion Calendar** with my own app and a **custom UI**.
-- **Sign in to my accounts inside the app** (like Notion Calendar does).
+- **Build my own calendar app** with a **custom UI**.
+- **Sign in to my accounts inside the app** (like a hosted calendar app does).
 - **My home server is the brain.** It holds the connections, syncs everything, and exposes **my own API**, so my scripts, automations and agents can read and write my calendars.
 - I can see what's coming up easily, and I can act on events: create, edit, move, delete, RSVP, join calls, add a Meet/Teams link.
 
@@ -13,7 +13,7 @@ _Researched 2026-10-10 · revision 3 (replacing Notion Calendar; signing in to a
 
 ## TL;DR — architecture
 
-This is how Notion Calendar works too: it has its own server holding your account connections. Here, **your home server plays that role.**
+This is how hosted calendar apps work: a server holds your account connections. Here, **your home server plays that role.**
 
 ```
                     ┌──────────────── Home server (Docker) ────────────────┐
@@ -35,9 +35,9 @@ This is how Notion Calendar works too: it has its own server holding your accoun
 
 ---
 
-## 1. The one-time "developer" setup (why Notion didn't need it, and why you do)
+## 1. The one-time "developer" setup (why a hosted app doesn't need it, and why you do)
 
-When you sign in with Google inside Notion Calendar, you're approving **Notion's** registered app. For your own app, you register your own app once. It's free, takes about 15 minutes, and **no review is needed for personal use.**
+When you sign in with Google inside a hosted calendar app, you're approving **that company's** registered app. For your own app, you register your own app once. It's free, takes about 15 minutes, and **no review is needed for personal use.**
 
 ### Google (Gmail / Google Workspace calendars)
 1. Create a project in Google Cloud Console → enable **Google Calendar API**.
@@ -124,7 +124,7 @@ The app is a **thin client of your home server.** It holds no provider logic.
 **Sign-in inside the app:** "Connect Google" opens `https://<server>/auth/google/start` in a system browser sheet (`ASWebAuthenticationSession` / Custom Tabs, via `expo-web-browser`). After approval the server redirects to `yourapp://connected`, and the sheet closes.
 → The phone must be on Tailscale while connecting, because the redirect goes to your server.
 
-**Screens to replace Notion Calendar**
+**Screens**
 - **Up next / agenda:** merged list, with a big "Join" button when a meeting is within 10 min
 - **Day / 3-day / week timeline**, with drag to move and drag to resize
 - **Quick add** (natural language)
@@ -132,7 +132,7 @@ The app is a **thin client of your home server.** It holds no provider logic.
 - **Calendars:** show/hide per calendar, colours, accounts + reconnect
 - **Widgets:** next event, today's list. **Notifications:** reminders before events (from the server via ntfy, or local notifications scheduled by the app)
 
-Notion Calendar features worth copying later: multiple timezones, sharing availability / booking links (your server can host a booking page), and a keyboard-driven command palette (a desktop/web version of your UI).
+Features worth adding later: multiple timezones, sharing availability / booking links (your server can host a booking page), and a keyboard-driven command palette (a desktop/web version of your UI).
 
 ---
 
@@ -147,7 +147,7 @@ Notion Calendar features worth copying later: multiple timezones, sharing availa
 | **4. App v1** | Agenda + day view + event detail + quick add + connect-accounts screen |
 | **5. Polish** | Week view with drag & drop, widgets, reminders/notifications, calendar toggles |
 | **6. Automations** | Scripts / Home Assistant / an LLM agent on top of your API; optional webhooks via Funnel |
-| **7. Migrate off Notion Calendar** | Revoke Notion Calendar's access in each Google/Microsoft account's security settings |
+| **7. Cut over** | Revoke the old calendar app's access in each Google/Microsoft account's security settings |
 
 ---
 
