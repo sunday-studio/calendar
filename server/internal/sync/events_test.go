@@ -125,3 +125,44 @@ func TestCadenceIsReadOnEveryWake(t *testing.T) {
 	clients.Store(1)
 	waitFor(t, func() bool { return ticks() > n })
 }
+
+// Google answers 410 fullSyncRequired to the sync token of its public holiday calendars on every request. They are read
+// in full, without a token, and then left alone until they are due, so they neither fail nor flip the account to syncing.
+func TestGoogleHolidayCalendarsAreReadWithoutASyncTokenAndLeftAlone(t *testing.T) {
+	e := newTEnv(t)
+	e.fake.addCal("en.gh#holiday@group.v.calendar.google.com", "Holidays in Ghana", "reader")
+	e.fake.put("en.gh#holiday@group.v.calendar.google.com", "h1", allDay("Independence Day", "2026-03-06", "2026-03-07"))
+	e.fake.mu.Lock()
+	e.fake.expireAll = true
+	e.fake.mu.Unlock()
+	a := e.addAccount("a@x.com", "rt-a")
+
+	if err := e.sync(a); err != nil {
+		t.Fatal(err)
+	}
+	if n := e.count(`SELECT COUNT(*) FROM events WHERE deleted_at IS NULL`); n != 1 {
+		t.Fatalf("events after the first read: %d", n)
+	}
+	if h := e.fake.hit("events"); h != 1 {
+		t.Fatalf("first read made %d events.list calls, want 1 (no sync token, so no 410 and no retry)", h)
+	}
+
+	// a routine poll skips it: it is not due for hours
+	if err := e.mgr.SyncAccount(context.Background(), a, Tick); err != nil {
+		t.Fatal(err)
+	}
+	if h := e.fake.hit("events"); h != 1 {
+		t.Fatalf("a routine poll read the holiday calendar again (%d calls)", h)
+	}
+
+	// a manual sync still reads it, again without a token
+	if err := e.sync(a); err != nil {
+		t.Fatal(err)
+	}
+	if h := e.fake.hit("events"); h != 2 {
+		t.Fatalf("manual sync made %d calls in total, want 2", h)
+	}
+	if n := e.count(`SELECT COUNT(*) FROM events WHERE deleted_at IS NULL`); n != 1 {
+		t.Fatalf("events after the second read: %d", n)
+	}
+}

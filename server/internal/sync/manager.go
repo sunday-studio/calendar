@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
+	"strings"
 	gosync "sync"
 	"sync/atomic"
 	"time"
@@ -489,6 +490,9 @@ func (m *Manager) syncAccount(ctx context.Context, id string, trig Trigger) (ret
 		if !cal.Visible {
 			continue
 		}
+		if staticFeed(*acct, cal) && trig == Tick && !m.staticDue(ctx, cal.ID) {
+			continue
+		}
 		cs := m.now()
 		st, cerr := m.syncCalendar(ctx, prov, *acct, cal)
 		total.add(st)
@@ -715,6 +719,25 @@ func (m *Manager) discover(ctx context.Context, prov provider.Provider, acct dom
 	return out, err
 }
 
+// staticRefresh is how often a static feed is re-read in full.
+const staticRefresh = 6 * time.Hour
+
+// staticFeed reports whether a calendar is one of Google's public holiday calendars. Google answers 410 fullSyncRequired
+// to the sync token of every one of them, on every request, so incremental sync cannot work. They change a few times a
+// year, so they are read in full every staticRefresh instead, which also keeps them out of the "syncing" state on every poll.
+func staticFeed(acct domain.Account, cal domain.Calendar) bool {
+	return acct.Provider == "google" && strings.HasSuffix(cal.RemoteID, "#holiday@group.v.calendar.google.com")
+}
+
+// staticDue is true when a static feed has never synced or was last read more than staticRefresh ago.
+func (m *Manager) staticDue(ctx context.Context, calID string) bool {
+	var last sql.NullInt64
+	if err := m.DB.R.QueryRowContext(ctx, `SELECT last_sync_at FROM calendars WHERE id=?`, calID).Scan(&last); err != nil || !last.Valid {
+		return true
+	}
+	return m.now().Sub(time.Unix(last.Int64, 0)) >= staticRefresh
+}
+
 func (m *Manager) cursor(ctx context.Context, calID string) (string, error) {
 	var c sql.NullString
 	err := m.DB.R.QueryRowContext(ctx, `SELECT sync_cursor FROM calendars WHERE id=?`, calID).Scan(&c)
@@ -737,6 +760,9 @@ func (m *Manager) syncCalendar(ctx context.Context, prov provider.Provider, acct
 	if err != nil {
 		telemetry.RecordError(ctx, "sync", err, telemetry.Operation("cursor"))
 		return total, err
+	}
+	if staticFeed(acct, cal) {
+		cursor = "" // see staticFeed: Google rejects the sync token of these calendars, so never send one
 	}
 	span.SetAttributes(attribute.Bool("calendar.sync.full", cursor == ""))
 	var seen map[string]struct{}
@@ -782,7 +808,7 @@ func (m *Manager) syncCalendar(ctx context.Context, prov provider.Provider, acct
 			resyncs++
 			telemetry.Inc(ctx, "sync.cursor_resets", pname, telemetry.Attr("reason", "410"))
 			span.AddEvent("sync.cursor_reset", trace.WithAttributes(attribute.String("calendar.reason", "410")))
-			telemetry.Log().InfoContext(ctx, "sync cursor expired; full resync", "account", acct.ID, "provider", acct.Provider, "why", serr.Error())
+			telemetry.Log().InfoContext(ctx, "sync cursor expired; full resync", "account", acct.ID, "calendar", cal.ID, "provider", acct.Provider, "why", serr.Error())
 			if _, e := m.DB.W.ExecContext(ctx, `UPDATE calendars SET sync_cursor=NULL WHERE id=?`, cal.ID); e != nil {
 				telemetry.RecordError(ctx, "sync", e, telemetry.Operation("reset_cursor"))
 				return total, e

@@ -67,10 +67,10 @@ edits and read-only calendars, plus push (silent wake, moved, cancelled and invi
 - The sync cadence is re-read on every wake, so polling no longer stalls on the slow interval.
 - The event detail page asks the hub to poll before refreshing.
 - A guest typed in the people screen and not submitted is kept when you leave it.
+- Google's public holiday calendars (their sync token is rejected every time) are read in full every six hours instead of
+  failing and resyncing on every poll.
 
 ### Known limitations
-- Google answers `fullSyncRequired` to the stored sync token on every poll for some calendars, so those calendars
-  resync fully each time. Correct, but wasteful; under investigation.
 - Offline save, conflict ("Changed elsewhere"), drag and resize, revoking access and moving between calendars have not
   been walked on a real account yet (docs/ops/SMOKE.md).
 - Widgets update after every sync and at event boundaries; with the app closed they depend on iOS letting a silent push or

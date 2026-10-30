@@ -63,7 +63,6 @@ Everything is indexed in [docs/README.md](docs/README.md). The useful starting p
 
 - Not yet walked on a real account: offline save, the "changed elsewhere" conflict, drag and resize, revoking access
   and moving events between calendars ([docs/ops/SMOKE.md](docs/ops/SMOKE.md)).
-- Google answers `fullSyncRequired` to the stored sync token for some calendars, so those resync fully on every poll.
 - With the app closed, widgets update only when iOS lets a silent push or a background refresh through.
 - Only Google and ICS providers exist.
 
