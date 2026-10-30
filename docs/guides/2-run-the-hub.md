@@ -189,16 +189,23 @@ Skip this on a first install; you can add it any time. The hub can send traces, 
 backend, such as Grafana Cloud, Honeycomb, SigNoz or your own collector. It is **off** unless you set an endpoint: with
 nothing set, the hub starts no exporter and makes no network calls. The container logs above work with or without it.
 
-1. Add to `calendard.env`. The `OTEL_*` examples for each backend are already in the example file, commented out.
+1. Paste this block into `calendard.env`. Every line starts commented out, so copying it changes nothing until you
+   remove the `#` from the lines you want. Only the endpoint is required.
 
    ```sh
-   OTEL_EXPORTER_OTLP_ENDPOINT=https://<your-otlp-endpoint>
-   OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20<token>    # only if the backend wants a key; a space is written %20
-   OTEL_RESOURCE_ATTRIBUTES=deployment.environment=prod
+   # Observability (OpenTelemetry). OFF unless an OTLP endpoint is set.
+   # OTEL_EXPORTER_OTLP_ENDPOINT=https://<your-otlp-endpoint>
+   # OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20<token>    # only if the backend wants a key; a space is written %20
+   # OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf                    # or grpc
+   # OTEL_SERVICE_NAME=calendard
+   # OTEL_RESOURCE_ATTRIBUTES=deployment.environment=prod
+   # OTEL_TRACES_SAMPLER=parentbased_always_on                    # or parentbased_traceidratio with OTEL_TRACES_SAMPLER_ARG=0.25
+   # OTEL_METRIC_EXPORT_INTERVAL=60000                            # ms
+   # One signal off: OTEL_TRACES_EXPORTER=none | OTEL_METRICS_EXPORTER=none | OTEL_LOGS_EXPORTER=none
+   # Everything off: OTEL_SDK_DISABLED=true
    ```
 
-   The headers hold a secret, so keep the file at `chmod 600`. Add `OTEL_EXPORTER_OTLP_PROTOCOL=grpc` if your backend only
-   speaks gRPC.
+   The headers hold a secret, so keep the file at `chmod 600`.
 
 2. Restart and check:
 
