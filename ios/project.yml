@@ -82,7 +82,8 @@ targets:
     info:
       path: Calendar/Info.plist
       properties:
-        CFBundleDisplayName: Calendar
+        CFBundleDisplayName: "Calendar: SS"
+        CFBundleName: "Calendar: SS"   # Apple refuses a name another app already uses (ITMS-90129); the executable stays Calendar
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         ITSAppUsesNonExemptEncryption: false
@@ -133,7 +134,7 @@ targets:
     info:
       path: CalendarWidgets/Info.plist
       properties:
-        CFBundleDisplayName: Calendar
+        CFBundleDisplayName: "Calendar: SS"
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UIAppFonts:
@@ -161,7 +162,7 @@ targets:
     info:
       path: CalendarNotificationService/Info.plist
       properties:
-        CFBundleDisplayName: Calendar Notifications
+        CFBundleDisplayName: "Calendar: SS Notifications"
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
@@ -192,7 +193,7 @@ targets:
     info:
       path: CalendarNotificationContent/Info.plist
       properties:
-        CFBundleDisplayName: Calendar Long Look
+        CFBundleDisplayName: "Calendar: SS Long Look"
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UIAppFonts:
