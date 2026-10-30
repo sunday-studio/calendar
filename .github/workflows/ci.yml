@@ -81,7 +81,7 @@ jobs:
           go-version: '1.26'          # the newest 1.26.x: the go.mod line is only the minimum and would pin 1.26.0 (stdlib CVEs)
           check-latest: true
           cache-dependency-path: server/go.sum
-      - uses: golangci/golangci-lint-action@v8
+      - uses: golangci/golangci-lint-action@v9
         with:
           version: latest
           working-directory: server
