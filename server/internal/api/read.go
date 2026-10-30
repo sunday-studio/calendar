@@ -24,6 +24,7 @@ func (s *Server) readRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /v1/agenda", s.require(authn.Read, http.HandlerFunc(s.agenda)))
 	mux.Handle("GET /v1/events", s.require(authn.Read, http.HandlerFunc(s.listEvents)))
 	mux.Handle("GET /v1/events/{id}", s.require(authn.Read, http.HandlerFunc(s.getEvent)))
+	mux.Handle("GET /v1/events/{id}/brief", s.require(authn.Read, http.HandlerFunc(s.getEventBrief)))
 	mux.Handle("GET /v1/calendars", s.require(authn.Read, http.HandlerFunc(s.listCalendars)))
 	mux.Handle("PATCH /v1/calendars/{id}", s.require(authn.Write, http.HandlerFunc(s.patchCalendar)))
 	mux.Handle("GET /v1/settings", s.require(authn.Read, http.HandlerFunc(s.getSettings)))
@@ -141,6 +142,17 @@ func (s *Server) getEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteJSON(w, http.StatusOK, ev)
+}
+
+// getEventBrief names an event for a notification; unlike getEvent it still answers for an event cancelled in the
+// last two days.
+func (s *Server) getEventBrief(w http.ResponseWriter, r *http.Request) {
+	b, err := s.store().Brief(r.Context(), r.PathValue("id"))
+	if err != nil {
+		s.fail(w, "event brief", err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, b)
 }
 
 func (s *Server) listEvents(w http.ResponseWriter, r *http.Request) {

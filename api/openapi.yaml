@@ -158,6 +158,23 @@ paths:
         "424": { $ref: "#/components/responses/Error" }
         "429": { $ref: "#/components/responses/Error" }
         "502": { $ref: "#/components/responses/Error" }
+  /v1/events/{id}/brief:
+    parameters: [{ $ref: "#/components/parameters/EventId" }]
+    get:
+      tags: [events]
+      operationId: getEventBrief
+      summary: Just enough to name an event in a notification
+      description: |
+        Like `getEvent`, but small, and it also answers for an event that was cancelled or deleted in the last
+        48 hours (`cancelled: true`), which `getEvent` answers with 404. The notification extension uses it to
+        write "Design review at 14:30 cancelled" without the title ever travelling through Apple.
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventBrief" }
+        "404": { $ref: "#/components/responses/Error" }
   /v1/events/{id}:
     parameters: [{ $ref: "#/components/parameters/EventId" }]
     get:
@@ -1135,6 +1152,17 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
 
   schemas:
+    EventBrief:
+      type: object
+      required: [title, allDay, cancelled]
+      properties:
+        title: { type: string }
+        start: { type: string, format: date-time, description: "Next occurrence, else the event's own start" }
+        allDay: { type: boolean }
+        date: { type: string, description: "YYYY-MM-DD, all-day events only" }
+        place: { type: string, description: "Location, else the calendar's name" }
+        organizer: { type: string }
+        cancelled: { type: boolean }
     Scope:
       type: string
       enum: [this, following, all]

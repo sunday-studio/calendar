@@ -450,3 +450,32 @@ func TestAgendaPerformance20k(t *testing.T) {
 		t.Fatalf("agenda too slow: %v", best)
 	}
 }
+
+func TestBriefNamesCancelledAndDeletedEventsForTwoDays(t *testing.T) {
+	st, d := world(t) // now = 2026-10-15T08:00Z
+	Do(t, d, func(s *Seed) {
+		s.Event(Ev{ID: "B1", Cal: "C1", Title: "Design review", Start: u("2026-10-16T10:00:00Z"), End: u("2026-10-16T11:00:00Z")})
+		s.Event(Ev{ID: "B2", Cal: "C1", Title: "Gone yesterday", Start: u("2026-10-16T12:00:00Z"), End: u("2026-10-16T13:00:00Z")})
+		s.Event(Ev{ID: "B3", Cal: "C1", Title: "Gone last week", Start: u("2026-10-16T14:00:00Z"), End: u("2026-10-16T15:00:00Z")})
+	})
+	now := u("2026-10-15T08:00:00Z")
+	for id, at := range map[string]int64{"B2": now - 20*3600, "B3": now - 7*24*3600} {
+		if _, err := d.W.Exec(`UPDATE events SET status='cancelled', deleted_at=? WHERE id=?`, at, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	b, err := st.Brief(ctx, "B1:0")
+	if err != nil || b.Title != "Design review" || b.Cancelled || b.Start == nil || b.Place != "Work" {
+		t.Fatalf("live: %+v %v", b, err)
+	}
+	b, err = st.Brief(ctx, "B2")
+	if err != nil || b.Title != "Gone yesterday" || !b.Cancelled {
+		t.Fatalf("cancelled yesterday: %+v %v", b, err)
+	}
+	if _, err := st.Brief(ctx, "B3"); !errors.Is(err, agenda.ErrNotFound) {
+		t.Fatalf("cancelled last week: %v", err)
+	}
+	if _, err := st.Brief(ctx, "nope"); !errors.Is(err, agenda.ErrNotFound) {
+		t.Fatalf("unknown: %v", err)
+	}
+}
