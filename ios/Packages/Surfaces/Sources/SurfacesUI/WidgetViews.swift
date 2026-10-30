@@ -126,6 +126,13 @@ struct AllDayLine: View {
     }
 }
 
+private extension String {
+    /// "IN 16 H 14 MIN" -> "IN 16H 14MIN": in mono every space is a full cell, so units hug their number.
+    var tightUnits: String {
+        replacingOccurrences(of: #"(\d) (?=(D|H|MIN|M)\b)"#, with: "$1", options: .regularExpression)
+    }
+}
+
 /// The bright next-event block (r concentric to the container, inset 8) with flip cells, title, mono line and Join / Reply.
 struct NextBlock: View {
     let hero: DayLayout.Hero
@@ -136,7 +143,7 @@ struct NextBlock: View {
             FlipCells(hero.time, size: .small, onBlock: true).frame(width: FlipCells.width(hero.time, size: .small), alignment: .leading)
             VStack(alignment: .leading, spacing: 1) {
                 Text(hero.title).font(CalFont.font(.sansMedium, size: 15, relativeTo: .headline)).lineLimit(1).privateTitle(110)
-                Text(sub).font(CalFont.font(.mono, size: 10, relativeTo: .caption2)).tracking(0.6).lineLimit(1).opacity(0.72)
+                Text(sub.tightUnits).font(CalFont.font(.mono, size: 10, relativeTo: .caption2)).tracking(0.2).lineLimit(1).opacity(0.72)
             }
             .foregroundStyle(WidgetTheme.blockInk)
             Spacer(minLength: 4)
@@ -679,7 +686,7 @@ struct MediumNextPanelView: View {
             Text(h.title).font(CalFont.font(.sansMedium, size: 15, relativeTo: .headline)).lineLimit(2).frame(width: 116, alignment: .leading)
                 .privateTitle(90).offset(x: 8, y: 64)
             HStack {
-                Text(h.sub.replacingOccurrences(of: "REPLY NEEDED \u{00B7} ", with: "")).font(CalFont.font(.monoMedium, size: 11, relativeTo: .caption2)).lineLimit(1)
+                Text(h.sub.replacingOccurrences(of: "REPLY NEEDED \u{00B7} ", with: "").tightUnits).font(CalFont.font(.monoMedium, size: 11, relativeTo: .caption2)).lineLimit(1)
                 Spacer(minLength: 0)
                 if let url = h.joinURL {
                     Link(destination: url) {
