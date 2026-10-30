@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-30
+
 ### Added
 - Step-by-step setup guides (`docs/guides`), push and troubleshooting pages, and `scripts/set-bundle-id.sh` to swap the
   app's bundle id, App Group and push topic for your own.
@@ -92,5 +94,6 @@ edits and read-only calendars, plus push (silent wake, moved, cancelled and invi
 - The Week view was removed at the author's request; the views are Agenda, Day and 3 days.
 - Quick add runs on rules only until the alfather contract is confirmed (H9).
 
-[Unreleased]: https://github.com/sunday-studio/calendar/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/sunday-studio/calendar/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/sunday-studio/calendar/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/sunday-studio/calendar/releases/tag/v0.1.0
