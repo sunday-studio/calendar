@@ -26,10 +26,6 @@ if ! [[ "$TEAM_ID" =~ ^[A-Z0-9]{10}$ ]]; then
   echo "TEAM_ID does not look like a team id (10 uppercase letters/digits)." >&2
   exit 2
 fi
-if [ "$TEAM_ID" = "2QG5WSN24S" ]; then
-  echo "2QG5WSN24S is the free Personal Team: it cannot do Push or TestFlight. Use the paid team id." >&2
-  exit 2
-fi
 if [ -n "${BUILD_NUMBER:-}" ] && ! [[ "$BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
   echo "BUILD_NUMBER must be a positive integer." >&2
   exit 2

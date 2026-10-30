@@ -78,7 +78,7 @@ watcher=$!; disown "$watcher" 2>/dev/null || true
 trap 'touch "$ctl/stop"; kill $watcher 2>/dev/null; cleanup' EXIT
 
 # ---- app + tests
-(cd "$root/ios" && xcodegen generate >/dev/null) || { echo "FAIL: xcodegen"; exit 1; }
+(cd "$root/ios" && CALENDAR_TEAM_ID="${CALENDAR_TEAM_ID:-}" xcodegen generate >/dev/null) || { echo "FAIL: xcodegen"; exit 1; }
 echo "ios-e2e: building"
 (cd "$root/ios" && xcodebuild build-for-testing -project Calendar.xcodeproj -scheme Calendar -destination "id=$udid" \
   -derivedDataPath "$dd" -skipPackagePluginValidation -skipMacroValidation CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- \

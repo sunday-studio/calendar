@@ -4,7 +4,7 @@ Why: the free Personal Team cannot do Push or Time Sensitive Notifications and i
 after 7 days. A paid-team Release build (TestFlight, or ad hoc) has neither limit. The Debug/personal flow is unchanged.
 
 ## Team id: one variable, no file edits
-`DEVELOPMENT_TEAM` in `ios/project.yml` is `${CALENDAR_TEAM_ID}`. The Makefile defaults it to the Personal Team.
+`DEVELOPMENT_TEAM` in `ios/project.yml` is `${CALENDAR_TEAM_ID}`. The Makefile leaves it empty, so set it to your team id for device and release builds.
 
 | Goal | Command |
 | --- | --- |

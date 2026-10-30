@@ -26,10 +26,10 @@ Image: `ghcr.io/sunday-studio/calendar-hub`. Tags: `edge` (latest main), `sha-<s
 ## One-time setup (yours to run)
 
 ```sh
-cd /Users/casprine/Desktop/vendor/personal/calendar
+cd <repo>
 git init -b main
 git add -A && git commit -m "Initial commit"
-gh repo create calendar --private --source . --push     # or create it in the web UI and: git remote add origin ... && git push -u origin main
+gh repo create calendar --source . --push     # or create it in the web UI and: git remote add origin ... && git push -u origin main
 ```
 
 The root `.gitignore` already ignores `deploy/secrets/*`, `deploy/calendard.env`, `*.p8`, `*.db*`, `.e2e*/` and build outputs; verify with the commands in RELEASING.md before the first commit (`.dockerignore` only affects image builds). No repository secrets are needed: GHCR publishing uses the built-in `GITHUB_TOKEN`. In *Settings > Actions > General*, workflow permissions can stay on "read repository contents"; the jobs request `packages: write` (image) and `contents: write` (GitHub Release only) themselves.

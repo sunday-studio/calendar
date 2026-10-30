@@ -75,9 +75,9 @@ ios-gen-personal:
 	cd ios && sed -e '/aps-environment: development/d' -e '/usernotifications.time-sensitive: true/d' project.yml > project.personal.yml && xcodegen generate --spec project.personal.yml && rm -f project.personal.yml
 
 # ---- release builds with the paid team (docs/ops/testflight.md) ----
-# CALENDAR_TEAM_ID feeds DEVELOPMENT_TEAM in ios/project.yml; default is the free Personal Team.
+# CALENDAR_TEAM_ID feeds DEVELOPMENT_TEAM in ios/project.yml; empty by default (simulator builds need none); set it to your Apple team to run on a device.
 # Release: CALENDAR_TEAM_ID=<paid id> make ios-gen
-export CALENDAR_TEAM_ID ?= 2QG5WSN24S
+export CALENDAR_TEAM_ID ?=
 
 # TestFlight: TEAM_ID=<paid id> [BUILD_NUMBER=n] [NO_UPLOAD=1] make ios-archive
 .PHONY: ios-archive ios-archive-adhoc

@@ -1,6 +1,6 @@
 # Build Status
 
-_Updated 2026-10-24. Version 0.1.0 (pre-release). Everything is built and tested against fakes (fake Google, fixtures, the simulator); nothing has run against real Google or on a physical iPhone. See the table "Since 0.1.0" for the current work and CI for why CI is off._
+_Updated 2026-10-30. Version 0.1.0. Run end to end on a real Google account, over Tailscale, on a physical iPhone (create, edit, delete, RSVP, guests, Meet, all-day and repeating events, push). The board below is the original build history; what remains open is in the README's Limitations and the changelog._
 
 _Coordinator (session "cordinator") owns this file. Lane agents tick their own rows and append to DECISIONS.md §D. One task at a time per lane; each task ends with a short report to the coordinator._
 

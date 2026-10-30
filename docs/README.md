@@ -8,7 +8,7 @@ Back to the [project README](../README.md).
 - [MILESTONES.md](product/MILESTONES.md): milestones M0 to M9.
 
 ## process/
-- [COORDINATION.md](process/COORDINATION.md): how multiple agents work together (read before changing anything).
+- [COORDINATION.md](process/COORDINATION.md): how the multi-agent build was organised (history; contributors start at [CONTRIBUTING.md](../CONTRIBUTING.md)).
 - [STATUS.md](process/STATUS.md): task board per lane, and the work since 0.1.0.
 - [DECISIONS.md](process/DECISIONS.md): decisions, things only you can do, open questions, log.
 - [CHANGELOG.md](process/CHANGELOG.md): user-visible changes per version (read and written by `scripts/release.sh` and the release workflow).

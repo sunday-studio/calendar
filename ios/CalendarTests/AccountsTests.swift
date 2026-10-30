@@ -169,7 +169,7 @@ func acct(_ status: String, detail: String? = nil, color: String = "cobalt") -> 
         #expect(PairingViewModel.normalize(" https://hub.ts.net/ ")?.absoluteString == "https://hub.ts.net")
         #expect(PairingViewModel.normalize("localhost:8080")?.absoluteString == "http://localhost:8080")
         #expect(PairingViewModel.normalize("127.0.0.1:8080")?.absoluteString == "http://127.0.0.1:8080")
-        #expect(PairingViewModel.normalize("100.127.10.66:8790")?.absoluteString == "http://100.127.10.66:8790")
+        #expect(PairingViewModel.normalize("100.64.0.7:8790")?.absoluteString == "http://100.64.0.7:8790")
         #expect(PairingViewModel.normalize("192.168.1.20:8787")?.absoluteString == "http://192.168.1.20:8787")
         #expect(PairingViewModel.normalize("10.0.0.5")?.absoluteString == "http://10.0.0.5")
         #expect(PairingViewModel.normalize("mini.local:8787")?.absoluteString == "http://mini.local:8787")

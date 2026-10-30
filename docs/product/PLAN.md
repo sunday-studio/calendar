@@ -36,7 +36,7 @@ Build **my own calendar**:
 | **M4** | Act | Create / edit / move / delete / RSVP / Meet link from the app | E5 |
 | **M5** | Glanceable | Widgets, reminders, week view with drag & drop | E6 |
 | **M6** | Automate | API tokens, live stream, quick-add, automations/agent | E7 |
-| **M7** | Cut over | Notion Calendar removed | E8 |
+| **M7** | Cut over | Old calendar app removed | E8 |
 
 ---
 
