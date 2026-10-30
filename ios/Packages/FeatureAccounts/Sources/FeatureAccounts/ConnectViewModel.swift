@@ -130,6 +130,8 @@ public final class ConnectViewModel {
             ConnectFailure(title: "Different Google account", message: "You signed in with another account than the one you’re fixing. Choose the same one.")
         case "no_refresh_token":
             ConnectFailure(title: "Google gave no lasting access", message: "Remove this app at myaccount.google.com/permissions, then try again.")
+        case "scope_missing":
+            ConnectFailure(title: "Calendar access wasn’t allowed", message: "On Google’s permission screen, tick the box that lets this app see and edit your calendars, then try again.")
         case "exchange_failed":
             ConnectFailure(title: "The server couldn’t finish", message: "It couldn’t trade the code with Google. Check the server’s connection and try again.")
         default:

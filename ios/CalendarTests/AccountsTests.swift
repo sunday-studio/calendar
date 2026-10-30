@@ -257,7 +257,7 @@ struct DeepLinkTests {
     }
 
     @Test func everyServerErrorCodeHasItsOwnWords() {
-        let titles = ["access_denied", "invalid_state", "identity_mismatch", "no_refresh_token", "exchange_failed", "internal"]
+        let titles = ["access_denied", "invalid_state", "identity_mismatch", "no_refresh_token", "scope_missing", "exchange_failed", "internal"]
             .map { ConnectViewModel.describe(code: $0, reconnect: false).title }
         #expect(Set(titles).count == titles.count)
     }

@@ -5,7 +5,8 @@
    [step 2](2-run-the-hub.md) (it starts with `cal_`). The app checks that the hub is reachable, the certificate is valid,
    the token works and the versions match. All four should pass.
 3. **Settings, Accounts, Add Google account.** A sheet opens Google's sign-in. Pick your account, click **Advanced**, then
-   **Go to Calendar (unsafe)** on the "hasn't verified this app" page, and allow calendar access. You return to the app.
+   **Go to Calendar (unsafe)** on the "hasn't verified this app" page. On the permission screen, **tick the box for your
+   calendars** (Google lets you untick it) and continue. You return to the app.
 4. Repeat for each Google account.
 
 The first sync takes seconds to a few minutes for a calendar with years of events; events appear as each calendar

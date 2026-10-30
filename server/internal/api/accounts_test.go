@@ -34,6 +34,16 @@ type fakeGoogle struct {
 	codes      map[string]fakeIdent
 	challenges map[string]string // code -> PKCE challenge, set by authorize()
 	n          int
+	scope      string // what the token response says was granted; empty = the calendar scope is included
+}
+
+func (f *fakeGoogle) granted() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.scope != "" {
+		return f.scope
+	}
+	return "openid email https://www.googleapis.com/auth/calendar"
 }
 
 func newFakeGoogle(t *testing.T) *fakeGoogle {
@@ -54,7 +64,7 @@ func newFakeGoogle(t *testing.T) *fakeGoogle {
 		claims, _ := json.Marshal(map[string]string{"sub": id.sub, "email": id.email, "name": id.name})
 		idt := "x." + base64.RawURLEncoding.EncodeToString(claims) + ".y"
 		m := map[string]any{"access_token": "at-" + id.sub, "token_type": "Bearer", "expires_in": 3600,
-			"scope": "openid email https://www.googleapis.com/auth/calendar", "id_token": idt}
+			"scope": f.granted(), "id_token": idt}
 		if id.refresh != "" {
 			m["refresh_token"] = id.refresh
 		}
@@ -310,6 +320,19 @@ func TestDuplicateConnectUpdates(t *testing.T) {
 	// A brand-new identity without a refresh token is rejected.
 	u := e.signIn(fakeIdent{"sub-b", "b@x.com", "", ""}, map[string]any{"provider": "google"})
 	if u.Query().Get("error") != "no_refresh_token" || e.count(`SELECT COUNT(*) FROM accounts`) != 1 {
+		t.Fatal(u)
+	}
+}
+
+// Google lets people untick permissions on the consent screen, and Workspace admins can limit what an app may ask for.
+// An account that comes back without calendar access can only fail every sync with a 403, so it must not be connected.
+func TestAccountWithoutCalendarAccessIsRefused(t *testing.T) {
+	e := newEnv(t)
+	e.fake.mu.Lock()
+	e.fake.scope = "openid email profile"
+	e.fake.mu.Unlock()
+	u := e.signIn(fakeIdent{"sub-w", "w@work.com", "", "rt-w"}, map[string]any{"provider": "google"})
+	if u.Query().Get("error") != "scope_missing" || e.count(`SELECT COUNT(*) FROM accounts`) != 0 {
 		t.Fatal(u)
 	}
 }

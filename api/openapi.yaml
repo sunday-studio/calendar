@@ -533,7 +533,7 @@ paths:
       tags: [accounts]
       operationId: googleCallback
       summary: OAuth redirect target (unauthenticated, guarded by single-use state)
-      description: "302 to calendar://connected?account=ID&status=connecting, or calendar://connected?error=CODE (invalid_state, exchange_failed, identity_mismatch, no_refresh_token, access_denied, internal)."
+      description: "302 to calendar://connected?account=ID&status=connecting, or calendar://connected?error=CODE (invalid_state, exchange_failed, identity_mismatch, no_refresh_token, scope_missing, access_denied, internal)."
       security: []
       parameters:
         - { name: state, in: query, schema: { type: string } }

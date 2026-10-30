@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/oklog/ulid/v2"
@@ -48,6 +49,7 @@ const (
 	ErrCodeExchange         = "exchange_failed"
 	ErrCodeIdentityMismatch = "identity_mismatch"
 	ErrCodeNoRefreshToken   = "no_refresh_token"
+	ErrCodeScopeMissing     = "scope_missing"
 	ErrCodeInternal         = "internal"
 )
 
@@ -299,6 +301,11 @@ func (s *Service) Callback(ctx context.Context, state, code, providerErr string)
 
 // upsert returns (accountID, "") or ("", errorCode).
 func (s *Service) upsert(ctx context.Context, sess *oauth.Session, ident *oauth.Identity) (string, string) {
+	// Google lets people untick individual permissions on the consent screen. An account without calendar access can
+	// only ever fail every sync with a 403, so refuse it here, where the person can still fix it by trying again.
+	if !hasScope(ident.Scopes, oauth.GoogleScopes[0]) {
+		return "", ErrCodeScopeMissing
+	}
 	var resultID, errCode string
 	created := false
 	now := s.now().Unix()
@@ -498,4 +505,14 @@ func (s *Service) SetDisabled(ctx context.Context, id string, disabled bool) err
 		return s.setStatus(ctx, id, StatusDisabled, "", ``)
 	}
 	return s.setStatus(ctx, id, StatusOK, "", ``)
+}
+
+// hasScope reports whether the space-separated scope list from Google contains want.
+func hasScope(granted, want string) bool {
+	for _, sc := range strings.Fields(granted) {
+		if sc == want {
+			return true
+		}
+	}
+	return false
 }
