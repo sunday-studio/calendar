@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Added
+- `CALENDAR_OTEL_TOKEN`: send a bearer token to the telemetry backend without writing `OTEL_EXPORTER_OTLP_HEADERS`.
+  An `Authorization` entry in the headers still wins.
+- `CALENDAR_LOG_LEVEL` (`debug`, `info`, `warn`, `error` or `off`, default `info`) for the container log and the exported
+  logs, and `CALENDAR_OTEL_LOG_LEVEL` to set the exported logs' level separately.
+
+### Changed
+- The app is named "Calendar: SS", because Apple refuses the name "Calendar" (ITMS-90129).
+- The run-the-hub guide has the compose file inline, a "where the variables go" section, a verify checklist and an optional
+  observability section.
+
 ## [0.1.1] - 2026-10-30
 
 ### Added
