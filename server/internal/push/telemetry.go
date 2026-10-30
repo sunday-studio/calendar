@@ -56,6 +56,7 @@ func (d *Dispatcher) sendOne(ctx context.Context, e endpoint, m Message) int {
 		telemetry.RecordErrorKind(ctx, "push", telemetry.KindPush, serr, telemetry.Operation("send"), attribute.String("calendar.apns.status_class", cls))
 	}
 	telemetry.Inc(ctx, "push.sent", telemetry.Attr("kind", kind), telemetry.Outcome(out))
+	d.log().InfoContext(ctx, "push sent", "kind", kind, "env", env, "outcome", out)
 	span.SetAttributes(telemetry.Outcome(out))
 	if out == "ok" {
 		return 1

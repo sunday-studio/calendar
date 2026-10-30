@@ -12,6 +12,7 @@
 # Env: PORT (8787), LAN=1 (listen on all interfaces so a phone on the same Wi-Fi can reach it),
 #      CALENDAR_PUBLIC_URL (needed for Google sign-in; derived from Tailscale when available),
 #      any OTEL_* variable (telemetry passes straight through); or put them in .local/otel.env (loaded automatically).
+#      .local/hub.env (also loaded) holds hub settings such as the APNs key and the poll cadence.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 D=".local"; LOGS="$D/logs"; BIN="$D/calendard"
@@ -22,6 +23,8 @@ if [ ! -f "$D/master_key" ]; then ( umask 077; head -c32 /dev/urandom | base64 >
 chmod 600 "$D/master_key"
 # Optional local telemetry settings (git-ignored): OTEL_* variables for the hub, e.g. an Orion/collector endpoint.
 if [ -f "$D/otel.env" ]; then set -a; . "$D/otel.env"; set +a; fi
+# Optional hub settings (git-ignored): CALENDAR_APNS_*, CALENDAR_SYNC_FAST / CALENDAR_SYNC_SLOW, any CALENDAR_* variable.
+if [ -f "$D/hub.env" ]; then set -a; . "$D/hub.env"; set +a; fi
 
 PORT="${PORT:-8787}"
 HOST=127.0.0.1; [ "${LAN:-0}" = "1" ] && HOST=0.0.0.0

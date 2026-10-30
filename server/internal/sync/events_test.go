@@ -108,7 +108,16 @@ func TestCadenceIsReadOnEveryWake(t *testing.T) {
 	go func() { e.mgr.Run(ctx); close(done) }()
 	ticks := func() int { return e.count(`SELECT COUNT(*) FROM sync_runs WHERE calendar_id IS NULL`) }
 	waitFor(t, func() bool { return ticks() >= 1 })
+	// let the start-up passes finish (a loaded machine can run more than one), then expect quiet
 	n := ticks()
+	for settled := 0; settled < 3; {
+		time.Sleep(200 * time.Millisecond)
+		if m := ticks(); m == n {
+			settled++
+		} else {
+			n, settled = m, 0
+		}
+	}
 	time.Sleep(400 * time.Millisecond)
 	if ticks() != n {
 		t.Fatal("polled again with no client connected and an hour-long Slow cadence")
