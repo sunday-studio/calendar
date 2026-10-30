@@ -34,6 +34,10 @@ type Config struct {
 	Refresh func(ctx context.Context, accountID string) (string, error)
 	// Transport is the base round tripper (default: httpx.Transport over http.DefaultTransport).
 	Transport http.RoundTripper
+	// OnlyPrimaryVisible makes a calendar the hub has not seen before start hidden unless it is the account's main one,
+	// so adding an account does not pull in every holiday, colleague and shared calendar. People turn on the ones they
+	// want, and calendars already known keep their choice (Manager.discover). Off, Google's own "selected" flag decides.
+	OnlyPrimaryVisible bool
 }
 
 type Provider struct {
@@ -210,6 +214,16 @@ type gCalendar struct {
 	Deleted         bool   `json:"deleted"`
 }
 
+func (p *Provider) visibleByDefault(c gCalendar) bool {
+	if c.Hidden {
+		return false
+	}
+	if p.cfg.OnlyPrimaryVisible {
+		return c.Primary
+	}
+	return c.Selected == nil || *c.Selected
+}
+
 // Discover lists all calendars (paged). calendarList is small, so it is re-read in full each
 // pass instead of using its own syncToken; that also detects removed calendars.
 func (p *Provider) Discover(ctx context.Context, acct domain.Account) ([]provider.RemoteCalendar, error) {
@@ -246,7 +260,7 @@ func (p *Provider) Discover(ctx context.Context, acct domain.Account) ([]provide
 			}
 			out = append(out, provider.RemoteCalendar{
 				RemoteID: c.ID, Name: name, Color: c.BackgroundColor, TZID: c.TimeZone, Access: access,
-				IsPrimary: c.Primary, Visible: !c.Hidden && (c.Selected == nil || *c.Selected),
+				IsPrimary: c.Primary, Visible: p.visibleByDefault(c),
 			})
 		}
 		if r.NextPageToken == "" {

@@ -166,7 +166,7 @@ func serve(ctx context.Context, cfg *config.Config) error {
 		acc.Google = oauth.NewGoogle(*cf, strings.TrimRight(pub, "/")+"/auth/google/callback")
 		acc.Google.SetEndpoints(cfg.GoogleAuthURL, cfg.GoogleTokenURL, cfg.GoogleUserinfoURL)
 		providers["google"] = google.New(google.Config{ClientID: cf.ClientID, ClientSecret: cf.ClientSecret, Refresh: acc.RefreshToken,
-			BaseURL: cfg.GoogleAPIBase, TokenURL: cfg.GoogleTokenURL})
+			BaseURL: cfg.GoogleAPIBase, TokenURL: cfg.GoogleTokenURL, OnlyPrimaryVisible: true})
 	}
 	icsProv := ics.New(ics.Config{URL: acc.ICSURL, AllowPrivate: cfg.ICSAllowPrivate})
 	providers["ics"] = icsProv

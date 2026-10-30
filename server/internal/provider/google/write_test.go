@@ -608,3 +608,32 @@ func TestErrorMapping(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Adding an account must not switch on every holiday, colleague and shared calendar: with OnlyPrimaryVisible only the
+// account's main calendar starts visible; without it Google's own "selected" flag decides.
+func TestDiscoverStartsOnlyTheMainCalendarVisible(t *testing.T) {
+	visible := func(only bool) map[string]bool {
+		f := gtest.New(t)
+		f.AddCal("primary", "Me", "owner")
+		f.AddCal("holidays", "Holidays", "reader")
+		p := google.New(google.Config{
+			BaseURL: f.URL, TokenURL: f.URL + "/token", ClientID: "c", ClientSecret: "s", OnlyPrimaryVisible: only,
+			Refresh: func(context.Context, string) (string, error) { return "rt", nil },
+		})
+		cals, err := p.Discover(context.Background(), domain.Account{ID: "A1", Provider: "google"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]bool{}
+		for _, c := range cals {
+			out[c.RemoteID] = c.Visible
+		}
+		return out
+	}
+	if got := visible(true); !got["primary"] || got["holidays"] {
+		t.Fatalf("only the main calendar should start visible: %v", got)
+	}
+	if got := visible(false); !got["primary"] || !got["holidays"] {
+		t.Fatalf("without the option Google's flag decides: %v", got)
+	}
+}

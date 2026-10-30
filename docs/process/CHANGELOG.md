@@ -67,6 +67,8 @@ edits and read-only calendars, plus push (silent wake, moved, cancelled and invi
 - The sync cadence is re-read on every wake, so polling no longer stalls on the slow interval.
 - The event detail page asks the hub to poll before refreshing.
 - A guest typed in the people screen and not submitted is kept when you leave it.
+- Adding a Google account turns on only its main calendar; the others (holidays, colleagues, shared calendars) start off
+  and can be switched on in Settings. Calendars the hub already knows keep their setting.
 - Google's public holiday calendars (their sync token is rejected every time) are read in full every six hours instead of
   failing and resyncing on every poll.
 

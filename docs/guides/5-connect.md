@@ -10,6 +10,9 @@
    unticked, and continuing without ticking connects nothing. You return to the app.
 4. Repeat for each Google account.
 
+Only the account's main calendar is switched on at first. To see another one (a shared or team calendar, holidays), turn it
+on under **Settings, Calendars**.
+
 The first sync takes seconds to a few minutes for a calendar with years of events; events appear as each calendar
 finishes. After that the hub polls about every minute while the app is open and every five minutes otherwise.
 
