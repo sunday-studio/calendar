@@ -9,8 +9,19 @@ public struct FlipCells: View {
 
         var fontSize: CGFloat { switch self { case .small: 18; case .regular: 26; case .xl: 44 } }
         var height: CGFloat { switch self { case .small: 30; case .regular: 44; case .xl: 60 } }
-        /// DM Mono advance is 0.6 em; the canvas uses `1ch` per cell, gap included.
-        var cellWidth: CGFloat { (fontSize * 0.6).rounded(.up) }
+        /// DM Mono advance is 0.6 em. Every cell face is the advance rounded up plus 1 pt of air each side, so a glyph
+        /// (zero, colon, any digit) never touches or crosses its container; the 2 pt gap comes on top.
+        var faceWidth: CGFloat { (fontSize * 0.6).rounded(.up) + 2 }
+        /// Face plus gap: the distance from one cell to the next.
+        var pitch: CGFloat { faceWidth + FlipCells.gap }
+    }
+
+    static let gap: CGFloat = 2
+
+    /// Width of `text` drawn in cells. Always `pitch * count - gap`, so layouts can reserve it up front.
+    public static func width(_ text: String, size: Size = .regular) -> CGFloat {
+        guard !text.isEmpty else { return 0 }
+        return size.pitch * CGFloat(text.count) - gap
     }
 
     let text: String
@@ -27,7 +38,7 @@ public struct FlipCells: View {
     }
 
     public var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: FlipCells.gap) {
             ForEach(Array(text.enumerated()), id: \.offset) { _, ch in cell(ch) }
         }
         .opacity(dimmed ? 0.35 : 1)
@@ -41,8 +52,9 @@ public struct FlipCells: View {
             Rectangle().fill((onBlock ? Theme.flipCellOnBlock : Theme.flipCell).color)
             Rectangle().fill(Theme.flipSplit.color).frame(height: 2)
             Text(String(ch)).font(CalFont.flip(size: size.fontSize)).foregroundStyle(Theme.flipInk.color)
+                .lineLimit(1).fixedSize()
         }
-        .frame(width: size.cellWidth - 2, height: size.height)
-        .padding(.trailing, 2)
+        .frame(width: size.faceWidth, height: size.height)
+        .clipped()
     }
 }

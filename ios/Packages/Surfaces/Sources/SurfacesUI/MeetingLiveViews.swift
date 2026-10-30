@@ -66,7 +66,7 @@ public struct MeetingLockView: View {
                 .padding(.horizontal, 16).padding(.vertical, 14)
             } else {
                 HStack(spacing: 10) {
-                    FlipCells(format.flipTime(state.start), size: .small, onBlock: true).scaleEffect(22.0 / 18.0, anchor: .leading).frame(width: 66)
+                    FlipCells(format.flipTime(state.start), size: .small, onBlock: true).scaleEffect(22.0 / 18.0, anchor: .leading).frame(width: FlipCells.width(format.flipTime(state.start), size: .small) * 22.0 / 18.0)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(state.title).font(CalFont.font(.sansMedium, size: 20, relativeTo: .headline)).lineLimit(1)
                         meta.opacity(0.72)

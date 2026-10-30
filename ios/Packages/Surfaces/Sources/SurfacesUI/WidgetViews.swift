@@ -133,7 +133,7 @@ struct NextBlock: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            FlipCells(hero.time, size: .small, onBlock: true).frame(width: 54, alignment: .leading)
+            FlipCells(hero.time, size: .small, onBlock: true).frame(width: FlipCells.width(hero.time, size: .small), alignment: .leading)
             VStack(alignment: .leading, spacing: 1) {
                 Text(hero.title).font(CalFont.font(.sansMedium, size: 15, relativeTo: .headline)).lineLimit(1).privateTitle(110)
                 Text(sub).font(CalFont.font(.mono, size: 10, relativeTo: .caption2)).tracking(0.6).lineLimit(1).opacity(0.72)
@@ -403,7 +403,7 @@ public struct NextSmallView: View {
             VStack(alignment: .leading, spacing: 0) {
                 ZStack(alignment: .topLeading) {
                     FlipCells(h.time, size: .small, onBlock: true).scaleEffect(22.0 / 18.0, anchor: .topLeading)
-                        .frame(width: 66, height: 36, alignment: .topLeading).offset(x: 8, y: 8)
+                        .frame(width: FlipCells.width(h.time, size: .small) * 22.0 / 18.0, height: 36, alignment: .topLeading).offset(x: 8, y: 8)
                     if let b = h.badge {
                         Text(b).font(CalFont.font(.mono, size: 9, relativeTo: .caption2)).tracking(0.9).foregroundStyle(WidgetTheme.blockInk)
                             .padding(.horizontal, 5).padding(.vertical, 1)
