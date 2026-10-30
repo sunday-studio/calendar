@@ -31,7 +31,7 @@ The published image with everything as env values (no secret files), and the com
 | `CALENDAR_MASTER_KEY_FILE` | `/run/calendar-secrets/master_key` (set by compose) |
 | `CALENDAR_GOOGLE_CLIENT_FILE` | `/run/calendar-secrets/google_client.json` (set by compose); unset = Google sign-in disabled (503 `unavailable`) |
 | `CALENDAR_BACKUP_DIR` / `_KEEP` / `_HOUR` / `_PLAIN` | nightly backup folder (unset = none), how many to keep (14), local hour (3), `1` = do not encrypt |
-| `CALENDAR_APNS_KEY_FILE` or `CALENDAR_APNS_KEY` (value) / `_KEY_ID` / `_TEAM_ID` / `_TOPIC` | push (unset key = push disabled); topic defaults to `dev.casprine.calendar` |
+| `CALENDAR_APNS_KEY_FILE` or `CALENDAR_APNS_KEY` (value) / `_KEY_ID` / `_TEAM_ID` / `_TOPIC` | push (unset key = push disabled); topic defaults to `studio.thesunday.calendar` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` (+ `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`, `OTEL_EXPORTER_OTLP_PROTOCOL`, `OTEL_TRACES_SAMPLER`) | OpenTelemetry export, off unless an endpoint is set; standard OTEL_* variables, passed through `calendard.env`; see `docs/engineering/observability.md` |
 | `CALENDAR_SYNC_FAST` / `_SLOW` | poll cadence with / without the app connected (60s / 5m) |
 

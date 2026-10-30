@@ -27,7 +27,7 @@ type Config struct {
 	APNsKey            string        // CALENDAR_APNS_KEY: the same key as a value (PEM, PEM with \n escapes, or base64 of the PEM); the file wins
 	APNsKeyID          string        // CALENDAR_APNS_KEY_ID
 	APNsTeamID         string        // CALENDAR_APNS_TEAM_ID
-	APNsTopic          string        // CALENDAR_APNS_TOPIC: bundle id (default dev.casprine.calendar)
+	APNsTopic          string        // CALENDAR_APNS_TOPIC: bundle id (default studio.thesunday.calendar)
 	BackupDir          string        // CALENDAR_BACKUP_DIR: nightly backups go here; empty = no scheduled backup
 	BackupKeep         int           // CALENDAR_BACKUP_KEEP: how many to keep (default 14)
 	BackupHour         int           // CALENDAR_BACKUP_HOUR: local hour of the nightly backup (default 3)
@@ -94,7 +94,7 @@ func Load() (*Config, error) {
 		GoogleClientSecret: os.Getenv("CALENDAR_GOOGLE_CLIENT_SECRET"),
 		APNsKeyID:          os.Getenv("CALENDAR_APNS_KEY_ID"),
 		APNsTeamID:         os.Getenv("CALENDAR_APNS_TEAM_ID"),
-		APNsTopic:          env("CALENDAR_APNS_TOPIC", "dev.casprine.calendar"),
+		APNsTopic:          env("CALENDAR_APNS_TOPIC", "studio.thesunday.calendar"),
 		AlfatherURL:        os.Getenv("CALENDAR_ALFATHER_URL"),
 		AlfatherParseTool:  env("CALENDAR_ALFATHER_PARSE_TOOL", "parse_event"),
 		AlfatherToken:      os.Getenv("CALENDAR_ALFATHER_TOKEN"),

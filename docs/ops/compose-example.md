@@ -63,7 +63,7 @@ CALENDAR_GOOGLE_CLIENT_SECRET=GOCSPX-...
 CALENDAR_APNS_KEY=<output of: base64 -i AuthKey_XXXX.p8 | tr -d '\n'>
 CALENDAR_APNS_KEY_ID=XXXXXXXXXX
 CALENDAR_APNS_TEAM_ID=YYYYYYYYYY
-CALENDAR_APNS_TOPIC=dev.casprine.calendar
+CALENDAR_APNS_TOPIC=studio.thesunday.calendar
 
 # --- Tuning (defaults shown) ---
 CALENDAR_SYNC_FAST=60s
@@ -105,7 +105,7 @@ Secrets as values (a `_FILE` variant exists for each, for the secret-file compos
 | `CALENDAR_GOOGLE_CLIENT_ID` + `CALENDAR_GOOGLE_CLIENT_SECRET` / `CALENDAR_GOOGLE_CLIENT_FILE` | none | The Google OAuth client. Unset = Google sign-in disabled. Needs `CALENDAR_PUBLIC_URL`. File form is JSON `{"client_id":"…","client_secret":"…"}`. |
 | `CALENDAR_APNS_KEY` / `CALENDAR_APNS_KEY_FILE` | none | The `.p8` auth key: base64 of the file, the PEM itself, or the PEM on one line with `\n`. Unset = push disabled. |
 | `CALENDAR_APNS_KEY_ID`, `CALENDAR_APNS_TEAM_ID` | none | From the Apple developer portal; required when a key is set. |
-| `CALENDAR_APNS_TOPIC` | `dev.casprine.calendar` | The app's bundle id. |
+| `CALENDAR_APNS_TOPIC` | `studio.thesunday.calendar` | The app's bundle id. |
 
 Server and storage.
 

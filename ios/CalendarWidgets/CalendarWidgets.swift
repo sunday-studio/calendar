@@ -69,7 +69,7 @@ struct SurfaceProvider: AppIntentTimelineProvider {
 
 struct NextEventWidget: Widget {
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: "dev.casprine.calendar.next", intent: CalendarWidgetIntent.self, provider: SurfaceProvider()) { entry in
+        AppIntentConfiguration(kind: "studio.thesunday.calendar.next", intent: CalendarWidgetIntent.self, provider: SurfaceProvider()) { entry in
             NextEntryView(entry: entry)
         }
         .configurationDisplayName("Next event")
@@ -104,7 +104,7 @@ private func widgetBackground(_ family: WidgetFamily, _ mode: WidgetRenderingMod
 
 struct TodayWidget: Widget {
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: "dev.casprine.calendar.today", intent: CalendarWidgetIntent.self, provider: SurfaceProvider()) { entry in
+        AppIntentConfiguration(kind: "studio.thesunday.calendar.today", intent: CalendarWidgetIntent.self, provider: SurfaceProvider()) { entry in
             TodayEntryView(entry: entry)
         }
         .configurationDisplayName("Today")
@@ -130,7 +130,7 @@ struct TodayEntryView: View {
 
 struct DateWidget: Widget {
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: "dev.casprine.calendar.date", intent: CalendarWidgetIntent.self, provider: SurfaceProvider()) { entry in
+        AppIntentConfiguration(kind: "studio.thesunday.calendar.date", intent: CalendarWidgetIntent.self, provider: SurfaceProvider()) { entry in
             DateEntryView(entry: entry)
         }
         .configurationDisplayName("Date")

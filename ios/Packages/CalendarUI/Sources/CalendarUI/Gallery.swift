@@ -116,10 +116,10 @@ struct GalleryContent: View {
             section("Fields, rows, checkbox")
             VStack(spacing: Spacing.l) {
                 LabeledField("Server address") { Text("https://hub.tail3a9f.ts.net") }
-                LabeledField("Focused", isFocused: true) { Text("casprine.001@gmail.com") }
+                LabeledField("Focused", isFocused: true) { Text("you@example.com") }
                 LabeledField("Error", error: "Apple did not accept that password.") { Text("Wrong password") }
             }.padding(.horizontal, Spacing.gutter)
-            ListRow("casprine.001@gmail.com", sub: "Google · 4 calendars", color: .cobalt, isFirst: true) { StatusLabel("1 min ago", kind: .ok) }
+            ListRow("you@example.com", sub: "Google · 4 calendars", color: .cobalt, isFirst: true) { StatusLabel("1 min ago", kind: .ok) }
             ListRow("[work email]", sub: "Microsoft · 2 calendars", color: .rose) { StatusLabel("Sign in", kind: .bad) }
             ChecklistRow("Reach the server", status: "Done", kind: .ok, isFirst: true)
             ChecklistRow("Read the server version", status: "Working", kind: .working)

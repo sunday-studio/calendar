@@ -16,7 +16,7 @@ struct WidgetReloadHook: AfterSyncHook {
 /// One environment per paired hub, shared by the UI and by background work (silent push, BGAppRefresh).
 final class AppServices: @unchecked Sendable {
     static let shared = AppServices()
-    static let refreshTaskID = "dev.casprine.calendar.refresh"
+    static let refreshTaskID = "studio.thesunday.calendar.refresh"
 
     private let lock = NSLock()
     private var cached: (config: HubConfig, env: AppEnvironment, scheduler: ReminderScheduler, live: LiveActivityController)?

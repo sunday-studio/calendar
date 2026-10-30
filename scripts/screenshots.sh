@@ -22,7 +22,7 @@ set -uo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 sim_name="${SHOTS_SIM:-Calendar Shots}"
 width="${SHOTS_WIDTH:-540}"
-bundle=dev.casprine.calendar
+bundle=studio.thesunday.calendar
 work="$(mktemp -d "${TMPDIR:-/tmp}/calendar-shots.XXXXXX")"
 out="$root/docs/assets"
 started_sim=0; udid=""; rc=1; hub_pid=""; fake_pid=""

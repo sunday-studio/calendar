@@ -73,7 +73,7 @@ func TestAPNsRequestShapeAndJWT(t *testing.T) {
 	key, pemBytes := testKey(t)
 	f := newAPNsFake(t)
 	clock := time.Date(2026, 10, 15, 8, 0, 0, 0, time.UTC)
-	a, err := NewAPNs(APNsConfig{KeyPEM: pemBytes, KeyID: "KEY123", TeamID: "TEAM456", Topic: "dev.casprine.calendar",
+	a, err := NewAPNs(APNsConfig{KeyPEM: pemBytes, KeyID: "KEY123", TeamID: "TEAM456", Topic: "studio.thesunday.calendar",
 		BaseURL: map[string]string{"sandbox": f.URL}, Now: func() time.Time { return clock }})
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +83,7 @@ func TestAPNsRequestShapeAndJWT(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := f.reqs[0]
-	if r.URL.Path != "/3/device/ab12" || r.Method != "POST" || r.Header.Get("apns-topic") != "dev.casprine.calendar" ||
+	if r.URL.Path != "/3/device/ab12" || r.Method != "POST" || r.Header.Get("apns-topic") != "studio.thesunday.calendar" ||
 		r.Header.Get("apns-push-type") != "alert" || r.Header.Get("apns-priority") != "10" || r.Header.Get("apns-collapse-id") != "ev-E1" {
 		t.Fatalf("%v %v", r.URL, r.Header)
 	}

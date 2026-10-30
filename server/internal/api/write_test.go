@@ -405,7 +405,7 @@ func TestRecurringScopeQuery(t *testing.T) {
 func TestPushRegistrationAndSummaryHTTP(t *testing.T) {
 	e := newWEnv(t)
 	tok := "ab" + "cdef0123456789abcdef0123456789abcdef0123456789abcdef01234567"
-	w := e.do("PUT", "/v1/devices/self/push", e.read, map[string]any{"apnsToken": tok, "environment": "sandbox", "bundleId": "dev.casprine.calendar"})
+	w := e.do("PUT", "/v1/devices/self/push", e.read, map[string]any{"apnsToken": tok, "environment": "sandbox", "bundleId": "studio.thesunday.calendar"})
 	e.check("/v1/devices/self/push", "PUT", w)
 	if w.Code != 204 || e.count(`SELECT COUNT(*) FROM push_endpoints`) != 1 {
 		t.Fatal(w.Code, w.Body.String())

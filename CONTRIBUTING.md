@@ -14,7 +14,7 @@ and small, focused ones are easiest to review.
 
 ## Making it yours
 
-The bundle id (`dev.casprine.calendar`), the App Group and the APNs topic belong to the original author's Apple account. To
+The bundle id (`studio.thesunday.calendar`), the App Group and the APNs topic belong to the original author's Apple account. To
 run your own build, run `scripts/set-bundle-id.sh com.yourname.calendar`, set `CALENDAR_APNS_TOPIC` on the hub to the same
 id, and generate the project with `CALENDAR_TEAM_ID=<your team id> make ios-gen`. Your own Google Cloud project and APNs key
 are needed for real accounts and push; [docs/guides](docs/guides/README.md) walks through them.

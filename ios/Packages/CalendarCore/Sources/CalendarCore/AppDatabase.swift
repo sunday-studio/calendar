@@ -1,7 +1,7 @@
 import Foundation
 import GRDB
 
-public let appGroupIdentifier = "group.dev.casprine.calendar"
+public let appGroupIdentifier = "group.studio.thesunday.calendar"
 
 /// On-device cache (ENGINEERING 8.3). Schema, records and the one-transaction snapshot writer.
 public struct AppDatabase: Sendable {

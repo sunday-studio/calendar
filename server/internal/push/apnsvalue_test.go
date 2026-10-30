@@ -16,7 +16,7 @@ func TestLoadAPNsValueTakesThePEMInEveryShapeAPanelStoresIt(t *testing.T) {
 		"escaped lines": strings.ReplaceAll(strings.TrimSpace(multi), "\n", `\n`),
 		"base64":        base64.StdEncoding.EncodeToString(pemBytes),
 	} {
-		if _, err := LoadAPNsValue(v, "KEYID12345", "TEAMID1234", "dev.casprine.calendar"); err != nil {
+		if _, err := LoadAPNsValue(v, "KEYID12345", "TEAMID1234", "studio.thesunday.calendar"); err != nil {
 			t.Errorf("%s: %v", name, err)
 		}
 	}

@@ -7,7 +7,7 @@ set -uo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 sim_name="${IOS_E2E_SIM:-Calendar E2E}"
 only="${IOS_E2E_ONLY:-E2ETests}"
-bundle=dev.casprine.calendar
+bundle=studio.thesunday.calendar
 work="$(mktemp -d "${TMPDIR:-/tmp}/calendar-ios-e2e.XXXXXX")"
 shots="${E2E_SHOTS:-$root/docs/screens/e2e}"
 dd="${IOS_E2E_DERIVED:-$root/.e2e-derived}"

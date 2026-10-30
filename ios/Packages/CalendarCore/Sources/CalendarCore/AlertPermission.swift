@@ -5,7 +5,7 @@ import UserNotifications
 /// on first launch over Home (design audit 7, item 1).
 public enum AlertPermission {
     /// Posted (main thread) after the user answered the system prompt.
-    public static let changed = Notification.Name("dev.casprine.calendar.alertPermissionChanged")
+    public static let changed = Notification.Name("studio.thesunday.calendar.alertPermissionChanged")
 
     public static func status() async -> UNAuthorizationStatus {
         await UNUserNotificationCenter.current().notificationSettings().authorizationStatus

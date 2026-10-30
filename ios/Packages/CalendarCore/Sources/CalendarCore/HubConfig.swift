@@ -12,7 +12,7 @@ public struct HubConfig: Codable, Hashable, Sendable {
 }
 
 public struct HubConfigStore: Sendable {
-    public static let defaultService = "dev.casprine.calendar.hub"
+    public static let defaultService = "studio.thesunday.calendar.hub"
     private let keychain: Keychain
     private let key = "hubConfig"
 

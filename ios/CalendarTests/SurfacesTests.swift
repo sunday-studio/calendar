@@ -557,7 +557,7 @@ private final class MemoryPushStore: PushRegistrationStore, @unchecked Sendable 
     let hub = URL(string: "https://hub.example.ts.net")!
 
     fileprivate func model(_ api: FakePushAPI, store: MemoryPushStore = MemoryPushStore(), env: PushEnvironment = .sandbox) -> PushRegistrationModel {
-        PushRegistrationModel(api: api, hub: hub, store: store, environment: env, bundleId: "dev.casprine.calendar")
+        PushRegistrationModel(api: api, hub: hub, store: store, environment: env, bundleId: "studio.thesunday.calendar")
     }
 
     @Test func hexEncodesTheToken() {

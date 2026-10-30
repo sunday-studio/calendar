@@ -5,7 +5,7 @@ import Testing
 /// Needs the simulator keychain, so lives in the app-hosted test target.
 @Suite(.serialized) struct KeychainTests {
     @Test func roundTrip() throws {
-        let kc = Keychain(service: "dev.casprine.calendar.tests.\(UUID().uuidString)")
+        let kc = Keychain(service: "studio.thesunday.calendar.tests.\(UUID().uuidString)")
         defer { try? kc.delete("k") }
         #expect(try kc.get("k") == nil)
         try kc.set(Data("one".utf8), for: "k")
@@ -16,7 +16,7 @@ import Testing
     }
 
     @Test func hubConfigRoundTrip() throws {
-        let store = HubConfigStore(keychain: Keychain(service: "dev.casprine.calendar.tests.\(UUID().uuidString)"))
+        let store = HubConfigStore(keychain: Keychain(service: "studio.thesunday.calendar.tests.\(UUID().uuidString)"))
         #expect(store.load() == nil)
         let cfg = HubConfig(baseURL: URL(string: "https://hub.example")!, token: "cal_abc")
         try store.save(cfg)
