@@ -1,64 +1,45 @@
-# Documentation index
+# Documentation
 
 Back to the [project README](../README.md).
 
-## product/
-- [PLAN.md](product/PLAN.md): stories and scope.
-- [RESEARCH.md](product/RESEARCH.md): research behind the product (rev 3).
-- [MILESTONES.md](product/MILESTONES.md): milestones M0 to M9.
+## Set it up
+Start here: **[guides/](guides/README.md)**, six short steps from nothing to your calendars on your phone.
+1. [Create the Google OAuth client](guides/1-google-cloud.md)
+2. [Run the hub](guides/2-run-the-hub.md)
+3. [Put HTTPS in front of it](guides/3-https.md)
+4. [Build the app and install it](guides/4-install-the-app.md)
+5. [Pair and connect Google](guides/5-connect.md)
+6. [Keep it running](guides/6-keep-it-running.md)
 
-## process/
-- [COORDINATION.md](process/COORDINATION.md): how the multi-agent build was organised (history; contributors start at [CONTRIBUTING.md](../CONTRIBUTING.md)).
-- [STATUS.md](process/STATUS.md): task board per lane, and the work since 0.1.0.
-- [DECISIONS.md](process/DECISIONS.md): decisions, things only you can do, open questions, log.
-- [CHANGELOG.md](process/CHANGELOG.md): user-visible changes per version (read and written by `scripts/release.sh` and the release workflow).
+## Run it
+- [compose-example.md](ops/compose-example.md): the compose file and every environment variable, telemetry included.
+- [push.md](ops/push.md): push notifications and the APNs key.
+- [troubleshooting.md](ops/troubleshooting.md): symptom, cause, fix.
+- [RUNBOOK.md](ops/RUNBOOK.md): reconnect, backup, restore, rotation, upgrade.
+- [deploy.md](ops/deploy.md): what is in `deploy/`, with the secret-file variables.
+- [first-run.md](ops/first-run.md): the other route, building from source with secret files on a Mac.
+- [SMOKE.md](ops/SMOKE.md): a manual checklist to walk through on a real account.
+- [observability.md](engineering/observability.md): OpenTelemetry export (off by default).
 
-## engineering/
-- [ENGINEERING.md](engineering/ENGINEERING.md): the engineering plan and architecture for server and iOS, with the diagrams.
-- [e2e.md](engineering/e2e.md): end-to-end tests against the fake Google, including the iOS XCUITest layer.
-- [observability.md](engineering/observability.md): OpenTelemetry export (env-only, off by default).
-- [alfather.md](engineering/alfather.md): the alfather adapter and the hub's MCP server.
-- [scripts.md](engineering/scripts.md): script tokens, automations, MCP.
+## Try it without accounts
+- [local-run.md](ops/local-run.md): run the real hub on your machine.
+- [demo-data.md](ops/demo-data.md): the demo dataset and sync-state scenarios.
 
-## ops/
-- [local-run.md](ops/local-run.md): run the real hub on your machine and log your issues before going live.
-- [demo-data.md](ops/demo-data.md): the rich demo dataset, sync-state scenarios and a manual test checklist per screen.
-- [first-run.md](ops/first-run.md): ordered checklist for the first real deployment.
-- [deploy.md](ops/deploy.md): what is in `deploy/` and the hub's environment variables.
-- [RUNBOOK.md](ops/RUNBOOK.md): reconnect, backup, restore, rotation, upgrade, troubleshooting.
-- [SMOKE.md](ops/SMOKE.md): manual live checklist (`make smoke`).
-- [RELEASING.md](ops/RELEASING.md): versioning and how a release is cut.
-- [testflight.md](ops/testflight.md): signing, archive and upload.
-- [ci.md](ops/ci.md): GitHub Actions (switched off for now) and image publishing.
+## Build on it
+- [CONTRIBUTING.md](../CONTRIBUTING.md): set up, tests, pull requests.
+- [ENGINEERING.md](engineering/ENGINEERING.md): the architecture and the reasoning behind it, with diagrams.
+- [e2e.md](engineering/e2e.md): the end-to-end test layers against the fake Google.
+- [alfather.md](engineering/alfather.md) and [scripts.md](engineering/scripts.md): the MCP endpoint, automations and the alfather adapter.
+- [specs/](specs/README.md): per-screen implementation specs.
+- [openapi.yaml](../api/openapi.yaml): the wire contract between the hub and the app.
+- [RELEASING.md](ops/RELEASING.md), [ci.md](ops/ci.md), [testflight.md](ops/testflight.md): versioning, releases, CI and archive builds.
+- [CHANGELOG.md](process/CHANGELOG.md): user-visible changes per version.
 
-## design/
-- [design/README.md](design/README.md): the canvas link and what lives here.
-- [audit-final.md](design/audit-final.md): last design conformance audit (audit 7).
-- `design/audit-shots/`: the screenshots that audit cites (`fab-sheet-dark`, `home-light-axl`, `quick-preview-dark`, `quick-type-dark`, `select-home-dark`, `settings-light`).
+## History
+How the project was planned and built, kept for the reasoning rather than as instructions: [history/](history/) holds
+the original plan and research, the milestones, the decision log, the status board, the multi-agent coordination notes
+and the design audit.
 
-## specs/
-Per-screen implementation specs, indexed in [specs/README.md](specs/README.md).
-- [app-icon-launch.md](specs/app-icon-launch.md): app icon and launch screen.
-- [create-edit.md](specs/create-edit.md): create and edit an event.
-- [day-view.md](specs/day-view.md): Day and 3-day views.
-- [drag-resize.md](specs/drag-resize.md): drag and resize.
-- [event-detail.md](specs/event-detail.md): event detail.
-- [offline-status.md](specs/offline-status.md): offline and status screens.
-- [quick-add.md](specs/quick-add.md): quick add.
-- [rsvp.md](specs/rsvp.md): replying to invitations.
-- [search.md](specs/search.md): search.
-- [settings.md](specs/settings.md): settings.
-- [view-select.md](specs/view-select.md): the view selector.
-- [widgets-notifications.md](specs/widgets-notifications.md): widgets, notifications and Live Activity (v2).
-
-## assets/ (README photos)
-Regenerated by `scripts/screenshots.sh`; see [assets/README.md](assets/README.md).
-- `assets/icon.png`: the app icon, 512 px.
-- `assets/hero.png`, `hero-light.png`, `hero-dark.png`: three phones side by side.
-- `assets/screenshots/`: every screen in light and dark (`<screen>-light.png`, `<screen>-dark.png`).
-- `assets/design/`: widget, Live Activity and notification mock renders from the design canvas (not device captures).
-
-## screens/ (older reference and regression screenshots)
-Taken during development, partly from earlier builds; the current ones are in `assets/screenshots/`.
-- `screens/*.png`: pairing, Home, month, quick add, search, accounts, tokens, view select, widgets and component gallery references.
-- `screens/e2e/`: shots from an end-to-end run (`make ios-e2e-real` rewrites them).
+## Assets
+Screenshots and icons used by the README are regenerated by `scripts/screenshots.sh`; see [assets/README.md](assets/README.md).
+`screens/` holds older reference screenshots.

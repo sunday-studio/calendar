@@ -2,7 +2,7 @@
 
 The hub runs on a home server as a Docker Compose stack. Nothing is exposed to the public internet; the phone reaches the hub over the tailnet.
 
-**Start with [first-run.md](first-run.md)** (one ordered checklist: Google Cloud, secrets, build, HTTPS, pairing, backups) and run `deploy/first-run.sh` to check your setup.
+**Start with the [step-by-step guides](../guides/README.md)** (Google Cloud, the hub, HTTPS, the app, pairing, backups) and run `deploy/first-run.sh` to check your setup.
 
 Two variants, same `calendard`:
 - `compose.host-tailscale.yaml` (**default**, e.g. a Mac mini that already runs Tailscale): no sidecar and no auth key; `calendard` is published on `127.0.0.1:8787` only and the host's `tailscale serve` provides HTTPS.

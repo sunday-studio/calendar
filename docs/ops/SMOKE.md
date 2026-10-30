@@ -1,7 +1,7 @@
 # Smoke checklist (`make smoke`)
 
 Run before a release, against a real hub and **real Google accounts** (one personal Gmail, one Workspace if you have it). No fake can cover these.
-Tick each line; note anything surprising in docs/process/DECISIONS.md section B.
+Tick each line; note anything surprising and open an issue.
 
 ## Install
 - [ ] `hub doctor` shows no FAIL.

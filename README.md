@@ -40,31 +40,22 @@ version and no account to create.
 
 ## Get started
 
-You need a server with Docker, a Google Cloud OAuth client, and an Apple developer account if you want the app on
-your own iPhone. Each release publishes a multi-arch image and a deploy bundle.
+Six short steps, each with a check at the end, in [docs/guides](docs/guides/README.md):
 
-```sh
-docker login ghcr.io                      # the image is private until you make the package public
-docker compose -f deploy/compose.image.yaml up -d
-```
+1. [Create the Google OAuth client](docs/guides/1-google-cloud.md)
+2. [Run the hub](docs/guides/2-run-the-hub.md) with Docker: one image for amd64 and arm64, one env file
+3. [Put HTTPS in front of it](docs/guides/3-https.md), with Tailscale or any reverse proxy
+4. [Build the app and install it](docs/guides/4-install-the-app.md) on your iPhone with Xcode
+5. [Pair and connect Google](docs/guides/5-connect.md)
+6. [Keep it running](docs/guides/6-keep-it-running.md): backups, updates, a restore you have tried
 
-The compose file and every setting, in one env file: [docs/ops/compose-example.md](docs/ops/compose-example.md).
-The longer walkthrough (Google Cloud project, HTTPS over Tailscale, pairing the phone, backups):
-[docs/ops/first-run.md](docs/ops/first-run.md).
-
-The hub is generic. The app is built with the author's bundle id, App Group and push topic, so to install it on
-your own phone you change those to your team's: [CONTRIBUTING.md](CONTRIBUTING.md#making-it-yours).
-
-Want to try it first? A demo hub with fake data needs no Google account:
-
-```sh
-scripts/run-local.sh demo
-```
+You need a server with Docker, a Google account, a Mac with Xcode 26, and an Apple developer account for push
+notifications. Want to look around first? `scripts/run-local.sh demo` runs a hub with fake data and no accounts.
 
 ## Documentation
 
 Everything is indexed in [docs/README.md](docs/README.md). The useful starting points:
-[deploying](docs/ops/deploy.md), [day-two tasks and restore](docs/ops/RUNBOOK.md),
+[every setting](docs/ops/compose-example.md), [troubleshooting](docs/ops/troubleshooting.md), [backup and restore](docs/ops/RUNBOOK.md),
 [telemetry](docs/engineering/observability.md), [the API](api/openapi.yaml) and
 [the changelog](docs/process/CHANGELOG.md).
 

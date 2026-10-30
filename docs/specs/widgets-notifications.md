@@ -157,7 +157,7 @@ Widgets, accessories, the content extension and the NSE read the saved agenda on
 - `WidgetGallery.swift`: cases for all sizes, states, modes and light/dark.
 - `NotificationContentView.swift` (new): the long-look SwiftUI view (mini timeline, Join, invitation variant), used by the content extension.
 `ios/CalendarWidgets`
-- `CalendarWidgets.swift`: switch `NextEventWidget`, `TodayWidget`, `DateWidget` to `AppIntentConfiguration`/`CalendarWidgetIntent`; add `.systemLarge` to the Today widget (kind `dev.casprine.calendar.today`, families medium and large); wire `widgetRenderingMode`; remove container colour in accented mode; keep `systemExtraLarge` out. Add `CalendarWidgetIntent.swift` (new). Info.plist unchanged; entitlements keep the App Group.
+- `CalendarWidgets.swift`: switch `NextEventWidget`, `TodayWidget`, `DateWidget` to `AppIntentConfiguration`/`CalendarWidgetIntent`; add `.systemLarge` to the Today widget (kind `com.yourname.calendar.today`, families medium and large); wire `widgetRenderingMode`; remove container colour in accented mode; keep `systemExtraLarge` out. Add `CalendarWidgetIntent.swift` (new). Info.plist unchanged; entitlements keep the App Group.
 `ios/CalendarNotificationService`
 - `NotificationService.swift`: thumbnail attachment, subtitle, interruption level and relevance, generic text via `NotificationRewriter.generic`, agenda lookup before the hub call.
 `ios/CalendarNotificationContent` (new target)

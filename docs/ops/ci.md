@@ -1,15 +1,10 @@
 # CI and image publishing
 
-> **CI is switched off for now** (2026-10-23, on purpose, until the app and hub are in a state we are happy with). Both workflows are disabled on GitHub (`ci`, `release`). Turn them back on with:
-> `gh workflow enable ci.yml --repo sunday-studio/calendar && gh workflow enable release.yml --repo sunday-studio/calendar`
-> Dependabot version updates are a separate setting (`.github/dependabot.yml`) and are still active.
+The `ci` workflow runs vet, tests (with the race detector), `govulncheck` and the end-to-end suite against fixtures on every push and pull request; the iOS build and tests run on `main` and when `ios/`, `api/` or the Makefile change. `golangci-lint` is advisory (it reports unchecked `Close` and `Remove` errors, mostly in `server/internal/backup`).
 
-**Known failures when you switch it back on** (last runs before it was disabled, 2026-10-22/23):
-- (fixed) `govulncheck` reported Go standard-library vulnerabilities because `setup-go` installed Go 1.26.0; ci.yml now asks for the newest 1.26.x.
-- `golangci-lint` (advisory) reports unchecked `Close`/`Remove` errors, mostly in `server/internal/backup`.
-- The iOS job passed on `ci`, but `test / ios` failed once inside the `release` workflow; check `make ios-test` output there first.
+If you only want to build and publish from your own machine, with no Actions at all, see "Publishing by hand" below.
 
-Workflows live in `.github/`. The workflows ran on GitHub before they were switched off (see the known failures above); the server job's commands (`go vet`, `go test -race -count=1`) also pass locally. The Docker image has **not** been built, because no Docker daemon was available when this was written.
+Workflows live in `.github/`. Action versions are pinned by major tag, and Dependabot keeps them current.
 
 ## What runs
 
@@ -23,22 +18,15 @@ Workflows live in `.github/`. The workflows ran on GitHub before they were switc
 
 Image: `ghcr.io/sunday-studio/calendar-hub`. Tags: `edge` (latest main), `sha-<short>`, and on tag `v1.2.3`: `1.2.3`, `1.2` and `latest` (pre-releases like `v1.2.3-rc.1` get only `1.2.3-rc.1`). Action versions are pinned by major tag; Dependabot (weekly: Go modules, Actions, Docker base image, the CalendarCore Swift package) keeps them current. For stricter supply-chain hygiene, pin each `uses:` to a full commit SHA later (Dependabot can then bump the SHAs).
 
-## One-time setup (yours to run)
+## One-time setup
 
-```sh
-cd <repo>
-git init -b main
-git add -A && git commit -m "Initial commit"
-gh repo create calendar --source . --push     # or create it in the web UI and: git remote add origin ... && git push -u origin main
-```
-
-The root `.gitignore` already ignores `deploy/secrets/*`, `deploy/calendard.env`, `*.p8`, `*.db*`, `.e2e*/` and build outputs; verify with the commands in RELEASING.md before the first commit (`.dockerignore` only affects image builds). No repository secrets are needed: GHCR publishing uses the built-in `GITHUB_TOKEN`. In *Settings > Actions > General*, workflow permissions can stay on "read repository contents"; the jobs request `packages: write` (image) and `contents: write` (GitHub Release only) themselves.
+No repository secrets are needed: GHCR publishing uses the built-in `GITHUB_TOKEN`. In *Settings, Actions, General*, workflow permissions can stay on "read repository contents"; the jobs request `packages: write` (image) and `contents: write` (GitHub Release only) themselves.
 
 After the first successful `release` run the package is **private** by default and linked to the repo. In *Packages > calendar-hub > Package settings* either leave it private (the home server then needs a token) or set it public (no login required to pull; the image contains no secrets).
 
-## Home server
+## Running the published image
 
-The Mac mini currently **builds the image locally** (`docker compose -f deploy/compose.host-tailscale.yaml up -d --build`, see `docs/ops/first-run.md`); pulling from GHCR is optional for later. To switch: in the compose file replace the `build:` block and `image:` line of `calendard` with `image: ${CALENDAR_IMAGE:-ghcr.io/sunday-studio/calendar-hub:edge}`.
+Follow [compose-example.md](compose-example.md), or in the secret-file composes set `CALENDAR_IMAGE` to the published tag.
 
 For a private package, once per machine, with a classic PAT that has only `read:packages`:
 
@@ -55,6 +43,18 @@ docker compose -f deploy/compose.host-tailscale.yaml up -d
 ```
 
 The published image is multi-arch (`linux/amd64,linux/arm64`), so it runs natively on Apple Silicon.
+
+## Publishing by hand
+
+Without Actions, build both architectures on your machine and push (log in first with a token that has `write:packages`):
+
+```sh
+docker buildx create --name multi --driver docker-container --use
+docker buildx build --platform linux/amd64,linux/arm64 --build-arg VERSION=0.1.0 \
+  -t ghcr.io/<owner>/calendar-hub:0.1.0 -t ghcr.io/<owner>/calendar-hub:latest --push server
+```
+
+Then attach the deploy bundle to the GitHub Release with `gh release create` (the workflow's "Build release assets" step shows what goes in it).
 
 ## Releasing and rolling back
 

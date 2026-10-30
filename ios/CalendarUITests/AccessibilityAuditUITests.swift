@@ -3,7 +3,7 @@ import XCTest
 /// `performAccessibilityAudit` over the main screens, on the in-memory sample agenda (`-uiHome` / `-uiSettings` / `-uiEditor`
 /// harnesses; same shapes as the fixture hub). Run at the default type size and at AX5 (largest accessibility size).
 ///
-/// Issue types skipped on purpose (see docs/design/audit-final.md):
+/// Issue types skipped on purpose (see docs/history/design/audit-final.md):
 /// - `.contrast`: the canvas' hairline control borders are 1.2-1.4:1 by design (DECISIONS Q10), tracked there.
 final class AccessibilityAuditUITests: XCTestCase {
     static let ax5 = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge"]
@@ -17,7 +17,7 @@ final class AccessibilityAuditUITests: XCTestCase {
         return app
     }
 
-    /// Findings that come from CalendarUI internals or from the audit's own geometry, listed in docs/design/audit-final.md.
+    /// Findings that come from CalendarUI internals or from the audit's own geometry, listed in docs/history/design/audit-final.md.
     static func isKnownFalsePositive(_ issue: XCUIAccessibilityAuditIssue) -> Bool {
         // Text drawn without an accessibility node (the audit cannot name it); flip-cell glyph groups at AX5.
         guard let e = issue.element else { return issue.auditType == .elementDetection }

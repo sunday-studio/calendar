@@ -1,6 +1,6 @@
 # Releasing Calendar
 
-One product, one version. The hub image and the iOS app are released together under the same SemVer number. The repository is on GitHub (private) and CI is switched off for now (see [ci.md](ci.md)). The workflows and `scripts/release.sh` were checked with `actionlint`, `bash -n`/`shellcheck` and a dry run in a scratch repo; a real release has not been cut with them.
+One product, one version. The hub image and the iOS app are released together under the same SemVer number. The repository is on GitHub and the workflows are described in [ci.md](ci.md). `v0.1.0` was published by hand (see "Publishing by hand" in ci.md); later releases can use the `release` workflow.
 
 ## Versioning policy
 

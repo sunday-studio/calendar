@@ -1,6 +1,6 @@
-# First run on the Mac mini
+# Build from source with secret files (Docker on a Mac)
 
-One ordered checklist, from nothing to your Google calendars on the phone. Everything runs on the Mac mini (Apple Silicon, Docker Desktop or OrbStack, Tailscale already logged in) and the iPhone (Tailscale logged in). Commands run from the repo root. Nothing is exposed to the internet.
+The step-by-step guides in [docs/guides](../guides/README.md) install the published image and are what most people want. This is the other route: build the image from source, with the master key and the Google client as files in `deploy/secrets/`. It was written for a Mac mini. Everything runs on the Mac mini (Apple Silicon, Docker Desktop or OrbStack, Tailscale already logged in) and the iPhone (Tailscale logged in). Commands run from the repo root. Nothing is exposed to the internet.
 
 Why the host-Tailscale variant is the default: the Mac already is a tailnet node, so a second sidecar node would need an auth key, an ACL tag and a separate name, and it adds a TUN device inside the Docker VM, which is the least portable part of Docker on macOS. With `compose.host-tailscale.yaml` the hub listens on `127.0.0.1:8787` only (not even the LAN), `tailscale serve` adds HTTPS with a real certificate under the Mac's own name, and there is one fewer secret to guard. The sidecar variant (`deploy/compose.yaml`) stays available for servers that do not run Tailscale.
 
@@ -99,7 +99,7 @@ Steps 6 and 7 need real Google accounts and the phone: not run here.
   ```sh
   deploy/backup-offsite.sh "$HOME/Backups/calendar"          # copies calendar-*.db.enc, warns if stale
   ```
-  Schedule it with launchd (preferred on macOS) or cron. cron: `crontab -e` and add `30 3 * * * /Users/<you>/.../calendar/deploy/backup-offsite.sh $HOME/Backups/calendar` (cron needs Full Disk Access if the target is protected, and Docker must be running). launchd: a `~/Library/LaunchAgents/dev.casprine.calendar-backup.plist` with `ProgramArguments` (the script and the folder) and `StartCalendarInterval` Hour 3 Minute 30, then `launchctl load` it.
+  Schedule it with launchd (preferred on macOS) or cron. cron: `crontab -e` and add `30 3 * * * /Users/<you>/.../calendar/deploy/backup-offsite.sh $HOME/Backups/calendar` (cron needs Full Disk Access if the target is protected, and Docker must be running). launchd: a `~/Library/LaunchAgents/com.yourname.calendar-backup.plist` with `ProgramArguments` (the script and the folder) and `StartCalendarInterval` Hour 3 Minute 30, then `launchctl load` it.
 - The backup files are encrypted with a key derived from the master key, so the folder needs no extra protection, but **keep the master key somewhere else** (password manager, not Time Machine alone, not next to the backups). Both are needed to restore.
 - Rehearse once: `make backup-drill`. Restore steps: `docs/ops/RUNBOOK.md`.
 

@@ -183,9 +183,10 @@ jobs:
           done
           # operator docs travel with the bundle at the same relative paths (docs/ops/*)
           mkdir -p "$stage/docs/ops"
-          for f in deploy.md RUNBOOK.md SMOKE.md first-run.md compose-example.md; do
+          for f in deploy.md RUNBOOK.md SMOKE.md first-run.md compose-example.md push.md troubleshooting.md; do
             cp "docs/ops/$f" "$stage/docs/ops/$f"
           done
+          cp -r docs/guides "$stage/docs/guides"
           touch "$stage/deploy/secrets/.gitkeep"
           cp VERSION "$stage/VERSION"
 

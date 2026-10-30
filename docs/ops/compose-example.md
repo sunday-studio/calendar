@@ -91,7 +91,7 @@ tailscale serve --bg --https=443 http://127.0.0.1:8787
 curl -fsS https://calendar.your-tailnet.ts.net/health
 ```
 
-Then in the iPhone app pair with the hub address and its first token (created as in [first-run.md](first-run.md), steps 5 and 6). Register `https://calendar.your-tailnet.ts.net/auth/google/callback` as the redirect URI for the Google client before connecting an account.
+Then in the iPhone app pair with the hub address and its first token (see [step 5 of the guides](../guides/5-connect.md)). Register `https://calendar.your-tailnet.ts.net/auth/google/callback` as the redirect URI for the Google client before connecting an account.
 
 Update: set `CALENDAR_VERSION` (or edit the image tag), then `docker compose -f compose.image.yaml pull && docker compose -f compose.image.yaml up -d`. The hub copies the database before applying a migration. Backups, restore and rollback: [RUNBOOK.md](RUNBOOK.md).
 

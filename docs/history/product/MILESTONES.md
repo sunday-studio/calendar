@@ -1,6 +1,6 @@
 # Calendar — Milestone Plan
 
-_2026-10-11 · derived from [ENGINEERING.md](../engineering/ENGINEERING.md); stories from [PLAN.md](PLAN.md); screens from [design notes](../design/README.md)_
+_2026-10-11 · derived from [ENGINEERING.md](../../engineering/ENGINEERING.md); stories from [PLAN.md](PLAN.md); screens from [design notes](../design/README.md)_
 
 The app is called **Calendar**. This doc is the working plan: build in this order, ship each milestone as something you can use or demo.
 

@@ -22,17 +22,17 @@ Your paid team id is in developer.apple.com > Membership details (10 characters)
    the Personal Team. Run `CALENDAR_TEAM_ID=<paid id> make ios-gen`, open the project, check Signing & Capabilities.
 2. **Identifiers.** Automatic signing (`-allowProvisioningUpdates`) registers these for you on first archive; or
    create them by hand at developer.apple.com > Identifiers:
-   - `dev.casprine.calendar` (app), `dev.casprine.calendar.widgets`, `dev.casprine.calendar.notification-service`
-   - App Group `group.dev.casprine.calendar`, enabled on all three ids
+   - `com.yourname.calendar` (app), `com.yourname.calendar.widgets`, `com.yourname.calendar.notification-service`
+   - App Group `group.com.yourname.calendar`, enabled on all three ids
    - App id capabilities: Push Notifications, App Groups, Time Sensitive Notifications. Keychain sharing is implicit
-     (`$(AppIdentifierPrefix)dev.casprine.calendar.shared`). Live Activities need no switch.
+     (`$(AppIdentifierPrefix)com.yourname.calendar.shared`). Live Activities need no switch.
    - Changing prefix/group: update `project.yml` entitlements and `AppGroup` in CalendarCore.
 3. **APNs key**: Keys > "+" > Apple Push Notifications service (.p8, downloadable once). Note Key ID and Team ID.
    Give them to the hub as `CALENDAR_APNS_KEY_FILE`, `CALENDAR_APNS_KEY_ID`, `CALENDAR_APNS_TEAM_ID` (the paid team id)
-   and `CALENDAR_APNS_TOPIC=dev.casprine.calendar`; see `docs/ops/deploy.md` and `deploy/calendard.env.example`
+   and `CALENDAR_APNS_TOPIC=com.yourname.calendar`; see `docs/ops/deploy.md` and `deploy/calendard.env.example`
    (also uncomment the `apns_key` secret in `deploy/compose.yaml`). `hub doctor` must show `apns key ok`.
    A team-scoped key works for sandbox and production.
-4. **App Store Connect**: My Apps > "+" > New App, iOS, bundle id `dev.casprine.calendar`, any SKU.
+4. **App Store Connect**: My Apps > "+" > New App, iOS, bundle id `com.yourname.calendar`, any SKU.
    Privacy: **Data Not Collected** (the app only talks to your hub; `PrivacyInfo.xcprivacy` in the app and both
    extensions declares no tracking). Export compliance is answered in the build (`ITSAppUsesNonExemptEncryption = false`).
 5. **Archive and upload**:
