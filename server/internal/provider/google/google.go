@@ -273,6 +273,17 @@ func (p *Provider) Sync(ctx context.Context, acct domain.Account, cal domain.Cal
 		TimeZone      string   `json:"timeZone"`
 	}
 	if err := p.get(ctx, acct.ID, "/calendars/"+url.PathEscape(cal.RemoteID)+"/events", q, &r); err != nil {
+		if errors.Is(err, provider.ErrCursorExpired) {
+			keys := make([]string, 0, len(q))
+			for k := range q {
+				if k != "syncToken" && k != "pageToken" {
+					keys = append(keys, k+"="+strings.Join(q[k], ","))
+				} else {
+					keys = append(keys, k)
+				}
+			}
+			err = fmt.Errorf("%w (sent %s; primary=%t; cursor %d chars)", err, strings.Join(keys, "&"), cal.IsPrimary, len(req.Cursor))
+		}
 		return provider.SyncBatch{}, err
 	}
 	if cal.TZID == "" {
