@@ -60,8 +60,8 @@ edits and read-only calendars, plus push (silent wake, moved, cancelled and invi
   code, tokens and the Newsreader font removed.
 
 ### Fixed
-- Connecting a Google account that did not grant calendar access (the permission box left unticked, or limited by a
-  Workspace admin) is refused with a clear message instead of connecting and then failing every sync with a 403.
+- Connecting a Google account that did not grant calendar access (Google starts with the permission boxes unticked for an
+  unverified app, or a Workspace admin limits them) is refused with a clear message instead of connecting and then failing every sync with a 403.
 - Quick add, free time and search follow the 24-hour clock preference.
 - Events created in the app are accepted by Google (client-chosen ids are lowercase base32hex).
 - The sync cadence is re-read on every wake, so polling no longer stalls on the slow interval.
