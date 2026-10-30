@@ -20,7 +20,12 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     ITSAPPUSESNONEXEMPTENCRYPTION: NO   # only HTTPS/TLS and system crypto
   configs:
+    Debug:
+      CALENDAR_NAME_SUFFIX: " Dev"
+      CALENDAR_ID_SUFFIX: ".dev"   # a Debug build is a separate app (own bundle ids, App Group, keychain), so it installs beside the real one
     Release:
+      CALENDAR_NAME_SUFFIX: ""
+      CALENDAR_ID_SUFFIX: ""
       SWIFT_COMPILATION_MODE: wholemodule
       SWIFT_OPTIMIZATION_LEVEL: "-O"
       DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
@@ -61,7 +66,7 @@ targets:
         Debug:
           ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon-Dev   # amber "DEV" icon, so a dev build is never mistaken for the real app
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: studio.thesunday.calendar
+        PRODUCT_BUNDLE_IDENTIFIER: studio.thesunday.calendar$(CALENDAR_ID_SUFFIX)
         PRODUCT_NAME: Calendar
         TARGETED_DEVICE_FAMILY: "1"
         ENABLE_USER_SCRIPT_SANDBOXING: NO
@@ -76,8 +81,8 @@ targets:
       path: Calendar/Calendar.entitlements
       properties:
         <<: &shared_entitlements
-          com.apple.security.application-groups: [group.studio.thesunday.calendar]
-          keychain-access-groups: ["$(AppIdentifierPrefix)studio.thesunday.calendar.shared"]
+          com.apple.security.application-groups: [group.studio.thesunday.calendar$(CALENDAR_ID_SUFFIX)]
+          keychain-access-groups: ["$(AppIdentifierPrefix)studio.thesunday.calendar$(CALENDAR_ID_SUFFIX).shared"]
         # Push and Time Sensitive belong to the app only; the extensions share just the group and keychain.
         # Push (DECISIONS D S5): "development" is rewritten to "production" by the distribution profile at archive time.
         aps-environment: development
@@ -85,7 +90,7 @@ targets:
     info:
       path: Calendar/Info.plist
       properties:
-        CFBundleDisplayName: "Calendar: SS"
+        CFBundleDisplayName: "Calendar: SS$(CALENDAR_NAME_SUFFIX)"
         CFBundleName: "Calendar: SS"   # Apple refuses a name another app already uses (ITMS-90129); the executable stays Calendar
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
@@ -129,7 +134,7 @@ targets:
         product: SurfacesUI
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: studio.thesunday.calendar.widgets
+        PRODUCT_BUNDLE_IDENTIFIER: studio.thesunday.calendar$(CALENDAR_ID_SUFFIX).widgets
         SKIP_INSTALL: YES
     entitlements:
       path: CalendarWidgets/CalendarWidgets.entitlements
@@ -157,7 +162,7 @@ targets:
         product: SurfacesCore
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: studio.thesunday.calendar.notification-service
+        PRODUCT_BUNDLE_IDENTIFIER: studio.thesunday.calendar$(CALENDAR_ID_SUFFIX).notification-service
         SKIP_INSTALL: YES
     entitlements:
       path: CalendarNotificationService/CalendarNotificationService.entitlements
@@ -188,7 +193,7 @@ targets:
         product: SurfacesUI
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: studio.thesunday.calendar.notification-content
+        PRODUCT_BUNDLE_IDENTIFIER: studio.thesunday.calendar$(CALENDAR_ID_SUFFIX).notification-content
         SKIP_INSTALL: YES
     entitlements:
       path: CalendarNotificationContent/CalendarNotificationContent.entitlements

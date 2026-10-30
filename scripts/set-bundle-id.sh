@@ -10,7 +10,7 @@ set -euo pipefail
 NEW="${1:-}"
 [[ "$NEW" =~ ^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$ ]] || { echo "usage: $0 <reverse.dns.id>   e.g. com.example.calendar" >&2; exit 2; }
 cd "$(dirname "$0")/.."
-OLD=$(awk '/PRODUCT_BUNDLE_IDENTIFIER:/ {print $2; exit}' ios/project.yml)
+OLD=$(awk '/PRODUCT_BUNDLE_IDENTIFIER:/ {sub(/\$\(.*/, "", $2); print $2; exit}' ios/project.yml)
 [ -n "$OLD" ] || { echo "cannot find the current bundle id in ios/project.yml" >&2; exit 1; }
 PREFIX="${NEW%.*}"
 OLD_PREFIX="${OLD%.*}"

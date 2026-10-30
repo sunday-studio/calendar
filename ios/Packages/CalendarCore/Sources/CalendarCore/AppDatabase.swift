@@ -1,7 +1,11 @@
 import Foundation
 import GRDB
 
+#if DEBUG
+public let appGroupIdentifier = "group.studio.thesunday.calendar.dev"   // Debug builds are a separate app: see CALENDAR_ID_SUFFIX in project.yml
+#else
 public let appGroupIdentifier = "group.studio.thesunday.calendar"
+#endif
 
 /// On-device cache (ENGINEERING 8.3). Schema, records and the one-transaction snapshot writer.
 public struct AppDatabase: Sendable {
