@@ -66,4 +66,44 @@ The hub is one container. You need Docker with Compose v2 on a server, and the r
 **Check:** `curl http://127.0.0.1:8787/health` on the server answers `ok`. The hub listens on the server's loopback only,
 so nothing is reachable from outside yet. That is the next step.
 
+## Optional: watch the hub (observability)
+
+Skip this on a first install; you can add it any time. The hub can send traces, metrics and logs to any
+OpenTelemetry (OTLP) backend, such as Grafana Cloud, Honeycomb, SigNoz or your own collector. It is **off** unless you set
+an endpoint: with nothing set, the hub starts no exporter and makes no network calls.
+
+The container logs are always there, with or without this: JSON on stdout, with no tokens and no event titles.
+
+```bash
+docker compose -f compose.image.yaml logs -f calendard
+```
+
+To turn telemetry on:
+
+1. Add to `calendard.env` (the `OTEL_*` examples for each backend are already in the file, commented out):
+
+   ```sh
+   OTEL_EXPORTER_OTLP_ENDPOINT=https://<your-otlp-endpoint>
+   OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20<token>    # only if the backend wants a key; a space is written %20
+   OTEL_RESOURCE_ATTRIBUTES=deployment.environment=prod
+   ```
+
+   The headers hold a secret, so keep the file at `chmod 600`. Use `OTEL_EXPORTER_OTLP_PROTOCOL=grpc` if your backend
+   only speaks gRPC. Every other `OTEL_*` setting (sampling, export interval, switching one signal off) is in
+   [compose-example.md](../ops/compose-example.md).
+
+2. Restart and check:
+
+   ```bash
+   docker compose -f compose.image.yaml up -d
+   docker compose -f compose.image.yaml logs calendard | grep telemetry     # "telemetry enabled endpoint=... signals=traces,metrics,logs"
+   docker compose -f compose.image.yaml exec calendard calendard doctor     # the telemetry line says "endpoint reachable"
+   ```
+
+   Traces show up within seconds. Metrics arrive after one export interval (60 seconds by default).
+
+If the backend is down or slow, the hub keeps working and drops the telemetry until it is back. To switch everything off
+again, remove the lines or set `OTEL_SDK_DISABLED=true`. What is recorded, and how to try it locally with a throwaway
+Grafana, is in [observability.md](../engineering/observability.md).
+
 If something fails: [troubleshooting](../ops/troubleshooting.md).
