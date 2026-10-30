@@ -1,0 +1,40 @@
+# Calendar hub from the PUBLISHED image, configured entirely by environment values: no secret files, no build.
+# Copy this file and deploy/calendard.env.example to the server (the release bundle has both), then:
+#
+#   cp calendard.env.example calendard.env && chmod 600 calendard.env      # fill in the values
+#   docker login ghcr.io                                                    # the image is private: token with read:packages
+#   docker compose -f compose.image.yaml up -d
+#   tailscale serve --bg --https=443 http://127.0.0.1:8787                  # HTTPS inside your tailnet (needs a host Tailscale)
+#
+# Walkthrough and every variable: docs/ops/compose-example.md
+
+name: calendar
+
+services:
+  calendard:
+    image: ghcr.io/sunday-studio/calendar-hub:${CALENDAR_VERSION:-latest}   # pin an exact version in production, e.g. 0.1.0
+    pull_policy: always
+    env_file: ./calendard.env
+    environment:                      # fixed by this layout; everything configurable lives in calendard.env
+      CALENDAR_ADDR: 0.0.0.0:8787     # inside the container; the published port below is what limits exposure
+      CALENDAR_DB: /data/calendar.db
+      CALENDAR_BACKUP_DIR: /data/backups
+    ports:
+      - "127.0.0.1:${CALENDAR_HOST_PORT:-8787}:8787"   # loopback only; `tailscale serve` (or a reverse proxy) fronts it
+    volumes:
+      - data:/data                    # the database and the nightly encrypted backups
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "calendard", "health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    stop_grace_period: 20s
+
+volumes:
+  data:

@@ -177,13 +177,13 @@ jobs:
           mkdir -p "$out" "$stage/deploy/secrets"
 
           # explicit allow-list: never copy deploy/secrets/* or deploy/calendard.env
-          for f in calendard.env.example compose.yaml compose.host-tailscale.yaml \
+          for f in calendard.env.example compose.yaml compose.host-tailscale.yaml compose.image.yaml \
                    first-run.sh backup-offsite.sh drill.sh serve.json; do
             [ -f "deploy/$f" ] && cp "deploy/$f" "$stage/deploy/$f"
           done
           # operator docs travel with the bundle at the same relative paths (docs/ops/*)
           mkdir -p "$stage/docs/ops"
-          for f in deploy.md RUNBOOK.md SMOKE.md first-run.md; do
+          for f in deploy.md RUNBOOK.md SMOKE.md first-run.md compose-example.md; do
             cp "docs/ops/$f" "$stage/docs/ops/$f"
           done
           touch "$stage/deploy/secrets/.gitkeep"

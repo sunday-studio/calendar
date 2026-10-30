@@ -9,6 +9,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 Everything here is built and tested against fakes, like 0.1.0; nothing is verified on a physical device or against real Google.
 
 ### Added
+- Env-only deployment: `CALENDAR_APNS_KEY`, `CALENDAR_GOOGLE_CLIENT_ID` and `CALENDAR_GOOGLE_CLIENT_SECRET` accept the
+  APNs key and the Google client as values (the file variables still win), `deploy/compose.image.yaml` runs the published
+  image from one env file, and `docs/ops/compose-example.md` lists every variable including telemetry.
 - OpenTelemetry for the hub: traces, metrics and logs over OTLP, off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set,
   configured only through standard `OTEL_*` variables (see [observability.md](../engineering/observability.md)).
   `calendard doctor` reports and probes it.
@@ -23,6 +26,7 @@ Everything here is built and tested against fakes, like 0.1.0; nothing is verifi
   (`docs/assets`) and `scripts/screenshots.sh`, which regenerates the screenshots from the real app.
 
 ### Changed
+- The image listens on `0.0.0.0:8787` by default (it had a Tailscale address baked in); compose files publish it on loopback only.
 - Debug builds of the iOS app allow plain http to Tailscale addresses; Release builds are unchanged.
 - Pairing: an address typed without a scheme gets `http://` for private and Tailscale addresses (and `https://`
   otherwise), and a failed pairing shows the attempted URL and the system error code.
