@@ -47,6 +47,45 @@ The hub is one container. You need Docker with Compose v2 on a server, and the r
    Push notifications are optional and can wait: see [push.md](../ops/push.md). Every other setting, with its default, is
    in [compose-example.md](../ops/compose-example.md).
 
+   The bundle already contains the compose file used below. If you would rather not use the bundle, save this as
+   `compose.image.yaml` next to `calendard.env` (without the bundle, create `calendard.env` with just the four lines
+   above instead of copying the example) and nothing else is needed:
+
+   ```yaml
+   name: calendar
+
+   services:
+     calendard:
+       image: ghcr.io/sunday-studio/calendar-hub:${CALENDAR_VERSION:-latest}   # pin an exact version, e.g. 0.1.0
+       pull_policy: always
+       env_file: ./calendard.env
+       environment:                      # fixed by this layout; everything else lives in calendard.env
+         CALENDAR_ADDR: 0.0.0.0:8787     # inside the container
+         CALENDAR_DB: /data/calendar.db
+         CALENDAR_BACKUP_DIR: /data/backups
+       ports:
+         - "127.0.0.1:${CALENDAR_HOST_PORT:-8787}:8787"   # loopback only; the next step puts HTTPS in front
+       volumes:
+         - data:/data                    # the database and the nightly encrypted backups
+       read_only: true
+       tmpfs: [/tmp]
+       cap_drop: [ALL]
+       security_opt: ["no-new-privileges:true"]
+       restart: unless-stopped
+       healthcheck:
+         test: ["CMD", "calendard", "health"]
+         interval: 30s
+         timeout: 5s
+         retries: 3
+         start_period: 15s
+       stop_grace_period: 20s
+
+   volumes:
+     data:
+   ```
+
+   Keep the `data` volume: it holds your database and backups.
+
 ## Start it
 
 6. ```bash
