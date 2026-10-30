@@ -5,7 +5,7 @@
 > Dependabot version updates are a separate setting (`.github/dependabot.yml`) and are still active.
 
 **Known failures when you switch it back on** (last runs before it was disabled, 2026-10-22/23):
-- `govulncheck` still reports Go standard-library vulnerabilities: `setup-go` installs Go 1.26.0 even with `toolchain go1.26.10` in `server/go.mod`. Fix: pin `go-version: '1.26'` with `check-latest: true` in `ci.yml` (and the same in `release.yml`'s called jobs).
+- (fixed) `govulncheck` reported Go standard-library vulnerabilities because `setup-go` installed Go 1.26.0; ci.yml now asks for the newest 1.26.x.
 - `golangci-lint` (advisory) reports unchecked `Close`/`Remove` errors, mostly in `server/internal/backup`.
 - The iOS job passed on `ci`, but `test / ios` failed once inside the `release` workflow; check `make ios-test` output there first.
 
