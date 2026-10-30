@@ -6,6 +6,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Added
+- Step-by-step setup guides (`docs/guides`), push and troubleshooting pages, and `scripts/set-bundle-id.sh` to swap the
+  app's bundle id, App Group and push topic for your own.
+
+### Changed
+- Adding a Google account turns on only its main calendar; holiday, colleague and shared calendars start off and can be
+  switched on in Settings. Calendars the hub already knows keep their setting.
+- The app id is now `studio.thesunday.calendar` (App Group `group.studio.thesunday.calendar`) and the hub's default
+  `CALENDAR_APNS_TOPIC` follows it. A hub that pushes to a build with another bundle id must set the variable.
+
+### Fixed
+- Connecting a Google account that did not grant calendar access (Google starts with the permission boxes unticked for an
+  unverified app, or a Workspace admin limits them) is refused with a clear message instead of connecting and then
+  failing every sync with a 403.
+- Google's public holiday calendars, whose sync token Google rejects every time, are read in full every six hours
+  instead of failing and resyncing on every poll.
+- The sync indicator on the Home screen no longer blinks or moves the list.
+
 ## [0.1.0] - 2026-10-30
 
 First release. The hub and the iOS app were run end to end on a real Google account, over Tailscale, on a physical
@@ -60,19 +78,13 @@ edits and read-only calendars, plus push (silent wake, moved, cancelled and invi
   code, tokens and the Newsreader font removed.
 
 ### Fixed
-- Connecting a Google account that did not grant calendar access (Google starts with the permission boxes unticked for an
-  unverified app, or a Workspace admin limits them) is refused with a clear message instead of connecting and then failing every sync with a 403.
-- Quick add, free time and search follow the 24-hour clock preference.
 - Events created in the app are accepted by Google (client-chosen ids are lowercase base32hex).
 - The sync cadence is re-read on every wake, so polling no longer stalls on the slow interval.
 - The event detail page asks the hub to poll before refreshing.
 - A guest typed in the people screen and not submitted is kept when you leave it.
-- Adding a Google account turns on only its main calendar; the others (holidays, colleagues, shared calendars) start off
-  and can be switched on in Settings. Calendars the hub already knows keep their setting.
-- Google's public holiday calendars (their sync token is rejected every time) are read in full every six hours instead of
-  failing and resyncing on every poll.
-
 ### Known limitations
+- Google answers `fullSyncRequired` to the stored sync token on every poll for some calendars, so those calendars
+  resync fully each time. Correct, but wasteful; under investigation.
 - Offline save, conflict ("Changed elsewhere"), drag and resize, revoking access and moving between calendars have not
   been walked on a real account yet (docs/ops/SMOKE.md).
 - Widgets update after every sync and at event boundaries; with the app closed they depend on iOS letting a silent push or
