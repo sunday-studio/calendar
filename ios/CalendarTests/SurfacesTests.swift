@@ -356,6 +356,7 @@ private actor FakeCenter: ReminderCenter {
 
 private struct FakeNotificationHub: NotificationHubAPI {
     var detail: EventDetail?
+    var brief: EventBrief?
     var accounts: [Account] = []
     var summary: DaySummary?
     var delay: Duration = .zero
@@ -363,6 +364,11 @@ private struct FakeNotificationHub: NotificationHubAPI {
         try await Task.sleep(for: delay)
         guard let detail else { throw APIClientError.notFound(nil) }
         return detail
+    }
+    func brief(id: String) async throws -> EventBrief {
+        try await Task.sleep(for: delay)
+        guard let brief else { throw APIClientError.notFound(nil) }
+        return brief
     }
     func accounts() async throws -> [Account] { accounts }
     func summary(date: String?) async throws -> DaySummary {
@@ -396,6 +402,26 @@ private struct FakeNotificationHub: NotificationHubAPI {
         let n = await NotificationEnricher(api: FakeNotificationHub(), db: env.db, clock: .fixed(now)).notification(for: .init(kind: .cancelled, eventId: "E1"))
         #expect(n.title.hasSuffix("cancelled") && n.title.hasPrefix("Gym"))
         #expect(n.subtitle == "Home" && n.body.hasPrefix("Removed from"))
+    }
+
+    @Test func cancelledAndInvitedAreNamedByTheHubBriefWhenThePhoneNeverHadTheEvent() async {
+        let start = Date().addingTimeInterval(4 * 3600)
+        let hub = FakeNotificationHub(brief: EventBrief(title: "Board prep", start: start, place: "Work", organizer: "Sam Lee", cancelled: true))
+        let c = await NotificationEnricher(api: hub, db: nil).notification(for: .init(kind: .cancelled, eventId: "E9"))
+        #expect(c.title.hasPrefix("Board prep at ") && c.title.hasSuffix("cancelled"))
+        let i = await NotificationEnricher(api: FakeNotificationHub(brief: EventBrief(title: "Board prep", start: start, place: "Work", organizer: "Sam Lee")), db: nil)
+            .notification(for: .init(kind: .invited, eventId: "E9"))
+        #expect(i.title == "Invitation: Board prep" && i.subtitle == "From Sam Lee" && i.body.hasSuffix("Work"))
+        #expect(i.category == NotificationCategory.invite)
+        // nothing reachable: the generic wording still says what it is
+        let g = await NotificationEnricher(api: FakeNotificationHub(), db: nil).notification(for: .init(kind: .invited, eventId: "E9"))
+        #expect(g.title == "New invitation")
+    }
+
+    @Test func invitationAlertsFollowTheSettingAndDefaultToOn() {
+        #expect(AlertPrefs().invitations)
+        #expect(NotificationQuiet.isQuiet(.invited, prefs: AlertPrefs(invitations: false)))
+        #expect(!NotificationQuiet.isQuiet(.invited, prefs: AlertPrefs()))
     }
 
     @Test func timeoutFallsBackToGenericText() async {

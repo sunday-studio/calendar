@@ -512,7 +512,7 @@ struct AlertsScreen: View {
     @AppStorage(Prefs.alertJoinButton) private var joinButton = true
     @AppStorage(Prefs.alertMovedCancelled) private var moved = true
     @AppStorage(Prefs.alertNeedsSignIn) private var signIn = true
-    @AppStorage(Prefs.alertInvitations) private var invitations = false
+    @AppStorage(Prefs.alertInvitations) private var invitations = true
     @State private var permission: UNAuthorizationStatus = .authorized
     @Environment(\.openURL) private var openURL
     private let options: [(Int, String)] = [(0, "At the start"), (5, "5 minutes"), (10, "10 minutes"), (30, "30 minutes")]

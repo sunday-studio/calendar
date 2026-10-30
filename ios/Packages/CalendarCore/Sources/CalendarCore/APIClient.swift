@@ -87,6 +87,12 @@ public actor APIClient {
         try await value("v1/events/\(id)")
     }
 
+    /// `GET /v1/events/{id}/brief`: enough to name an event in a notification; still answers for an event cancelled
+    /// in the last two days, which `event(id:)` answers with 404.
+    public func brief(id: String) async throws -> EventBrief {
+        try await value("v1/events/\(id)/brief")
+    }
+
     /// `GET /v1/events`. Pass `q` for full-text search (then `from`/`to` are optional).
     public func events(q: String? = nil, from: Date? = nil, to: Date? = nil, calendar: String? = nil,
                        cursor: String? = nil, limit: Int? = nil) async throws -> EventPage {

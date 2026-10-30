@@ -4,6 +4,8 @@ import Foundation
 /// What the extension reads from the hub.
 public protocol NotificationHubAPI: Sendable {
     func event(id: String) async throws -> EventDetail
+    /// Names an event even when it was cancelled in the last two days (the hub 404s `event(id:)` for those).
+    func brief(id: String) async throws -> EventBrief
     func accounts() async throws -> [Account]
     func summary(date: String?) async throws -> DaySummary
 }
@@ -26,17 +28,20 @@ public struct NotificationEnricher: Sendable {
         let tz = (try? db?.userTimeZone()) ?? .current
         var ctx = RewriteContext(tz: tz, now: clock.now())
         switch p.kind {
-        case .moved, .cancelled:
+        case .moved, .cancelled, .invited:
             guard let id = p.eventId else { return NotificationRewriter.generic(p) }
             let local = await localItem(id)
             ctx.previousStart = local?.start
             if p.kind == .moved, let d = await fetch({ try await $0.event(id: id) }) {
                 ctx.event = EventFacts(d)
+            } else if p.kind != .moved, let b = await fetch({ try await $0.brief(id: id) }) {
+                // The brief still answers for an event cancelled in the last two days, and for an invitation the phone never saw.
+                ctx.event = EventFacts(b)
+                if p.kind == .cancelled { ctx.event?.cancelled = true }
             } else if let l = local {
                 ctx.event = EventFacts(item: l.item, place: l.place)
                 if p.kind == .cancelled { ctx.event?.cancelled = true }
             }
-            // A cancelled event is 404 on the hub; the saved agenda row is what it was.
         case .reauth:
             if let id = p.accountId {
                 if let db, let a = try? await GRDBAccountRepository(db: db).accounts().first(where: { $0.id == id }) {

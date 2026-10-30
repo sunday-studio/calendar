@@ -78,7 +78,7 @@ import Testing
     }
 
     @Test func defaults() {
-        #expect(AlertPrefs.load(suite()) == AlertPrefs(joinButton: true, movedCancelled: true, needsSignIn: true, invitations: false))
+        #expect(AlertPrefs.load(suite()) == AlertPrefs(joinButton: true, movedCancelled: true, needsSignIn: true, invitations: true))
     }
 
     @Test func mirrorCopiesStandardDefaultsToTheSharedSuite() {
@@ -94,11 +94,11 @@ import Testing
         #expect(!NotificationQuiet.isQuiet(.moved, prefs: p))
         #expect(!NotificationQuiet.isQuiet(.cancelled, prefs: p))
         #expect(!NotificationQuiet.isQuiet(.reauth, prefs: p))
-        #expect(NotificationQuiet.isQuiet(.changed, prefs: p))     // invitations default off
-        p.movedCancelled = false; p.needsSignIn = false; p.invitations = true
+        #expect(!NotificationQuiet.isQuiet(.changed, prefs: p) && !NotificationQuiet.isQuiet(.invited, prefs: p))   // invitations default on
+        p.movedCancelled = false; p.needsSignIn = false; p.invitations = false
         #expect(NotificationQuiet.isQuiet(.moved, prefs: p) && NotificationQuiet.isQuiet(.cancelled, prefs: p))
         #expect(NotificationQuiet.isQuiet(.reauth, prefs: p))
-        #expect(!NotificationQuiet.isQuiet(.changed, prefs: p))
+        #expect(NotificationQuiet.isQuiet(.changed, prefs: p) && NotificationQuiet.isQuiet(.invited, prefs: p))
         #expect(!NotificationQuiet.isQuiet(.summary, prefs: p) && !NotificationQuiet.isQuiet(.sync, prefs: p))
     }
 

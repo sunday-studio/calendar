@@ -66,9 +66,9 @@ public struct AlertPrefs: Equatable, Sendable {
     public var joinButton = true
     public var movedCancelled = true
     public var needsSignIn = true
-    public var invitations = false
+    public var invitations = true
 
-    public init(joinButton: Bool = true, movedCancelled: Bool = true, needsSignIn: Bool = true, invitations: Bool = false) {
+    public init(joinButton: Bool = true, movedCancelled: Bool = true, needsSignIn: Bool = true, invitations: Bool = true) {
         self.joinButton = joinButton; self.movedCancelled = movedCancelled
         self.needsSignIn = needsSignIn; self.invitations = invitations
     }
@@ -77,7 +77,7 @@ public struct AlertPrefs: Equatable, Sendable {
         AlertPrefs(joinButton: d.object(forKey: Key.joinButton) as? Bool ?? true,
                    movedCancelled: d.object(forKey: Key.movedCancelled) as? Bool ?? true,
                    needsSignIn: d.object(forKey: Key.needsSignIn) as? Bool ?? true,
-                   invitations: d.object(forKey: Key.invitations) as? Bool ?? false)
+                   invitations: d.object(forKey: Key.invitations) as? Bool ?? true)
     }
 
     /// The suite shared with extensions; nil when the group is unavailable (unsigned builds).

@@ -75,7 +75,7 @@ public enum NotificationRouter {
         if let s = userInfo["link"] as? String, let u = URL(string: s), let l = SurfaceLink.parse(u) { return .open(l) }
         switch userInfo["k"] as? String {
         case "cancelled": return .open(.today)   // the event is gone
-        case "moved", "reminder":
+        case "moved", "reminder", "invited":
             if let id = userInfo["eventId"] as? String, !id.isEmpty { return .open(.event(id)) }
             return .open(.today)
         case "reauth": return .open(.accounts)

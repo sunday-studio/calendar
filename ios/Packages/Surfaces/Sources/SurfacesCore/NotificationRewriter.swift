@@ -3,7 +3,7 @@ import Foundation
 
 /// Remote push payload (B2): `k` plus ids and counters only, never titles.
 public struct PushPayload: Equatable, Sendable {
-    public enum Kind: String, Sendable { case sync, moved, cancelled, changed, reauth, summary }
+    public enum Kind: String, Sendable { case sync, moved, cancelled, changed, reauth, summary, invited }
     public var kind: Kind
     public var eventId: String?
     public var accountId: String?
@@ -41,9 +41,16 @@ public struct EventFacts: Equatable, Sendable {
     public var date: String?
     public var place: String?       // calendar name, else location
     public var cancelled: Bool
+    public var organizer: String?
 
-    public init(title: String, start: Date?, allDay: Bool = false, date: String? = nil, place: String? = nil, cancelled: Bool = false) {
+    public init(title: String, start: Date?, allDay: Bool = false, date: String? = nil, place: String? = nil, cancelled: Bool = false,
+                organizer: String? = nil) {
         self.title = title; self.start = start; self.allDay = allDay; self.date = date; self.place = place; self.cancelled = cancelled
+        self.organizer = organizer
+    }
+
+    public init(_ b: EventBrief) {
+        self.init(title: b.title, start: b.start, allDay: b.allDay, date: b.date, place: b.place, cancelled: b.cancelled, organizer: b.organizer)
     }
 
     public init(_ d: EventDetail) {
@@ -51,7 +58,8 @@ public struct EventFacts: Equatable, Sendable {
     }
 
     public init(item i: AgendaItem, place: String?) {
-        self.init(title: i.title, start: i.start, allDay: i.allDay, date: i.date, place: place, cancelled: i.status == "cancelled")
+        self.init(title: i.title, start: i.start, allDay: i.allDay, date: i.date, place: place, cancelled: i.status == "cancelled",
+                  organizer: i.organizer.map { $0.name ?? $0.email })
     }
 }
 
@@ -98,6 +106,12 @@ public enum NotificationRewriter {
             let day = fmt.dayWord(start, now: c.now)
             let title = e.allDay ? "\(e.title) cancelled" : "\(e.title) at \(fmt.time(start)) cancelled"
             return .init(title: title, subtitle: e.place, body: "Removed from \(day).", category: NotificationCategory.event, thread: thread(p))
+        case .invited:
+            guard let e = c.event, !e.cancelled, let start = e.start ?? e.date.map({ DayKey($0).startOfDay(in: c.tz) }) else { return generic(p) }
+            let when = e.allDay ? fmt.dayWord(start, now: c.now) : "\(fmt.dayWord(start, now: c.now)) \(fmt.time(start))"
+            let body = [when.prefix(1).uppercased() + when.dropFirst(), e.place].compactMap { $0 }.joined(separator: " \u{00B7} ")
+            return .init(title: "Invitation: \(e.title)", subtitle: e.organizer.map { "From \($0)" }, body: body,
+                         category: NotificationCategory.invite, thread: thread(p))
         case .changed:
             return generic(p)
         case .reauth:
@@ -120,6 +134,8 @@ public enum NotificationRewriter {
                          category: NotificationCategory.reauth, thread: thread(p))
         case .summary:
             return .init(title: "Your day is ready", body: "Open Calendar to see today.", category: NotificationCategory.summary, thread: thread(p))
+        case .invited:
+            return .init(title: "New invitation", body: "Open Calendar to reply.", category: NotificationCategory.invite, thread: thread(p))
         case .moved, .cancelled, .changed, .sync:
             // The news goes in the first 30 characters of the title; same thread as the enriched text, which replaces it.
             return .init(title: "Your calendar changed", body: "Open Calendar to see what is new.", category: nil, thread: thread(p))
@@ -130,6 +146,7 @@ public enum NotificationRewriter {
         switch p.kind {
         case .reauth: "accounts"
         case .summary: "summary"
+        case .invited: "invitations"
         default: "events"
         }
     }
@@ -142,7 +159,7 @@ public enum NotificationQuiet {
         switch kind {
         case .moved, .cancelled: !prefs.movedCancelled
         case .reauth: !prefs.needsSignIn
-        case .changed: !prefs.invitations   // "several events changed" carries new invitations
+        case .changed, .invited: !prefs.invitations   // "several events changed" carries new invitations
         case .summary, .sync: false
         }
     }
