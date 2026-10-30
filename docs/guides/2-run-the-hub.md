@@ -18,33 +18,8 @@ HTTPS in [step 3](3-https.md).
 
 ## Get the files
 
-You need two files side by side in one folder: `compose.image.yaml` and `calendard.env`. There are two ways to get them.
-Pick one.
-
-|  | Release bundle | Write the files yourself |
-|---|---|---|
-| Best for | Starting from the tested defaults | Panels such as Portainer, or no shell access to unpack |
-| You get | `compose.image.yaml`, `calendard.env.example`, helper scripts | Only the two files below |
-| Env file | Copy the example and fill it in | Create it with the four required lines |
-
-### Option 1: Release bundle
-
-1. Download `calendar-deploy-<version>.tar.gz` from the [latest release](https://github.com/sunday-studio/calendar/releases/latest)
-   and unpack it on the server:
-
-   ```bash
-   tar -xzf calendar-deploy-0.1.0.tar.gz && cd calendar-deploy-0.1.0/deploy
-   ```
-
-2. Make the env file and lock it down:
-
-   ```bash
-   cp calendard.env.example calendard.env && chmod 600 calendard.env
-   ```
-
-### Option 2: Write the files yourself
-
-Create a folder, then save these two files in it. Fill in the env file as described in [Configure it](#configure-it).
+Create a folder on the server, then save these two files in it, side by side. Fill in the env file as described in
+[Configure it](#configure-it).
 
 ```yaml title="compose.image.yaml"
 name: calendar
@@ -117,7 +92,23 @@ head -c32 /dev/urandom | base64
 > [!WARNING]
 > Copy the master key into your password manager now. Without it nothing can be restored, and a backup is unreadable.
 
-Edit `calendard.env` and set these four values. The hub will not start without them.
+### Where the variables go
+
+Every setting goes in `calendard.env`, the file next to `compose.image.yaml`. The compose file loads it with this line, so you
+never edit the compose file to configure the hub:
+
+```yaml
+    env_file: ./calendard.env
+```
+
+One `NAME=value` per line, no quotes and no spaces around `=`. Lines starting with `#` are ignored. After you change the
+file, run `docker compose -f compose.image.yaml up -d` again (a plain `restart` does not re-read it).
+
+If you use a panel such as Portainer or Dockge instead of a shell, the file still has to exist next to the compose file for
+`env_file:` to find it. Check your panel's documentation for how it supplies environment variables to a stack.
+
+Edit `calendard.env` and set these four values. Without the two Google values the hub still runs, but `doctor` warns "accounts
+cannot be connected": it has no way to sign in to Google, so you cannot add a Google calendar until you set them.
 
 | Variable | What it is |
 |---|---|
@@ -177,7 +168,8 @@ Run these in the folder with `compose.image.yaml`.
 |---|---|
 | `docker compose -f compose.image.yaml ps` | Shows the container and whether it is healthy. |
 | `docker compose -f compose.image.yaml logs -f calendard` | Follows the log. JSON, with no tokens and no event titles. |
-| `docker compose -f compose.image.yaml restart` | Restarts the hub after you change `calendard.env`. |
+| `docker compose -f compose.image.yaml up -d` | Applies a change to `calendard.env` by recreating the container. |
+| `docker compose -f compose.image.yaml restart` | Restarts the hub without re-reading `calendard.env`. |
 | `docker compose -f compose.image.yaml exec calendard calendard doctor` | Checks the key, database, accounts, backups and telemetry. |
 | `docker compose -f compose.image.yaml down` | Stops it. The data stays in the `data` volume. |
 
@@ -195,12 +187,15 @@ nothing set, the hub starts no exporter and makes no network calls. The containe
    ```sh
    # Observability (OpenTelemetry). OFF unless an OTLP endpoint is set.
    # OTEL_EXPORTER_OTLP_ENDPOINT=https://<your-otlp-endpoint>
-   # OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20<token>    # only if the backend wants a key; a space is written %20
+   # CALENDAR_OTEL_TOKEN=<token>                                  # just the token; sent as "Authorization: Bearer <token>"
+   # OTEL_EXPORTER_OTLP_HEADERS=                                  # only for other headers or auth schemes; a space is written %20
    # OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf                    # or grpc
    # OTEL_SERVICE_NAME=calendard
    # OTEL_RESOURCE_ATTRIBUTES=deployment.environment=prod
    # OTEL_TRACES_SAMPLER=parentbased_always_on                    # or parentbased_traceidratio with OTEL_TRACES_SAMPLER_ARG=0.25
    # OTEL_METRIC_EXPORT_INTERVAL=60000                            # ms
+   # CALENDAR_LOG_LEVEL=info                                      # debug | info | warn | error | off (stdout and OTLP)
+   # CALENDAR_OTEL_LOG_LEVEL=                                     # OTLP logs only; defaults to CALENDAR_LOG_LEVEL
    # One signal off: OTEL_TRACES_EXPORTER=none | OTEL_METRICS_EXPORTER=none | OTEL_LOGS_EXPORTER=none
    # Everything off: OTEL_SDK_DISABLED=true
    ```
@@ -220,7 +215,10 @@ nothing set, the hub starts no exporter and makes no network calls. The containe
 | Variable | Default | What it does |
 |---|---|---|
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | none | Turns telemetry on for traces, metrics and logs. |
-| `OTEL_EXPORTER_OTLP_HEADERS` | none | `key=value` pairs for the backend's auth. A secret. |
+| `CALENDAR_OTEL_TOKEN` | none | A bearer token for the backend; no header syntax needed. A secret. |
+| `OTEL_EXPORTER_OTLP_HEADERS` | none | Only for other headers or auth schemes, as `key=value` pairs. A secret. |
+| `CALENDAR_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` or `off`, for the container log and the exported logs. |
+| `CALENDAR_OTEL_LOG_LEVEL` | as above | Level for the exported logs only. |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` | Or `grpc`. |
 | `OTEL_TRACES_SAMPLER`, `OTEL_TRACES_SAMPLER_ARG` | `parentbased_always_on` | For example `parentbased_traceidratio` and `0.25`. |
 | `OTEL_METRIC_EXPORT_INTERVAL` | `60000` | Milliseconds. |
