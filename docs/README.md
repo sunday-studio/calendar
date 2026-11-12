@@ -34,6 +34,7 @@ Start here: **[guides/](guides/README.md)**, six short steps from nothing to you
 - [openapi.yaml](../api/openapi.yaml): the wire contract between the hub and the app.
 - [RELEASING.md](ops/RELEASING.md), [ci.md](ops/ci.md), [testflight.md](ops/testflight.md): versioning, releases, CI and archive builds.
 - [CHANGELOG.md](process/CHANGELOG.md): user-visible changes per version.
+- [ISSUES.md](process/ISSUES.md): problems found in use and their status.
 
 ## History
 How the project was planned and built, kept for the reasoning rather than as instructions: [history/](history/) holds
