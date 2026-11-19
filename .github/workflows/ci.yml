@@ -55,7 +55,7 @@ jobs:
         working-directory: server
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: '1.26'          # the newest 1.26.x: the go.mod line is only the minimum and would pin 1.26.0 (stdlib CVEs)
           check-latest: true
@@ -76,7 +76,7 @@ jobs:
     continue-on-error: true   # default linters only; flip this off once the first run is clean
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: '1.26'          # the newest 1.26.x: the go.mod line is only the minimum and would pin 1.26.0 (stdlib CVEs)
           check-latest: true
@@ -92,7 +92,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: '1.26'          # the newest 1.26.x: the go.mod line is only the minimum and would pin 1.26.0 (stdlib CVEs)
           check-latest: true
